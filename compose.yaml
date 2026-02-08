@@ -2,8 +2,8 @@ services:
   postgres:
     image: 'postgres:latest'
     environment:
-      - 'POSTGRES_DB=VMLDB'
+      - 'POSTGRES_DB=vmldb'
       - 'POSTGRES_PASSWORD=password'
-      - 'POSTGRES_USER=root'
+      - 'POSTGRES_USER=postgres'
     ports:
-      - '5432'
+      - '3080:5432'
