@@ -1,9 +1,9 @@
-package com.example.visceralmassageapi.controller;
+package com.example.visceralmassageapi.articles.controller;
 
-import com.example.visceralmassageapi.dto.ArticleCreateRequest;
-import com.example.visceralmassageapi.dto.ArticleResponse;
-import com.example.visceralmassageapi.dto.ArticleUpdateRequest;
-import com.example.visceralmassageapi.service.ArticleService;
+import com.example.visceralmassageapi.articles.dto.ArticleCreateRequest;
+import com.example.visceralmassageapi.articles.dto.ArticleResponse;
+import com.example.visceralmassageapi.articles.dto.ArticleUpdateRequest;
+import com.example.visceralmassageapi.articles.service.ArticleService;
 import jakarta.validation.Valid;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;

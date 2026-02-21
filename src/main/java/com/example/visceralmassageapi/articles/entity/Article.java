@@ -1,4 +1,4 @@
-package com.example.visceralmassageapi.entity;
+package com.example.visceralmassageapi.articles.entity;
 
 import jakarta.persistence.*;
 

@@ -1,4 +1,4 @@
-package com.example.visceralmassageapi.exception;
+package com.example.visceralmassageapi.articles.exception;
 
 public class ArticleNotFoundException extends RuntimeException {
     public ArticleNotFoundException(Integer id) {

@@ -1,8 +1,8 @@
-package com.example.visceralmassageapi.mapper;
+package com.example.visceralmassageapi.articles.mapper;
 
-import com.example.visceralmassageapi.dto.ArticleCreateRequest;
-import com.example.visceralmassageapi.dto.ArticleResponse;
-import com.example.visceralmassageapi.entity.Article;
+import com.example.visceralmassageapi.articles.dto.ArticleCreateRequest;
+import com.example.visceralmassageapi.articles.dto.ArticleResponse;
+import com.example.visceralmassageapi.articles.entity.Article;
 
 public class ArticleMapper {
     public static Article toEntity(ArticleCreateRequest req) {

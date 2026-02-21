@@ -1,4 +1,4 @@
-package com.example.visceralmassageapi.exception;
+package com.example.visceralmassageapi.articles.exception;
 
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;

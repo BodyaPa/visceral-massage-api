@@ -1,4 +1,4 @@
-package com.example.visceralmassageapi.dto;
+package com.example.visceralmassageapi.articles.dto;
 
 public class ArticleResponse {
     private Integer id;

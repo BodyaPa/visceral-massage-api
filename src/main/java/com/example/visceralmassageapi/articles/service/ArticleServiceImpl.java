@@ -1,13 +1,11 @@
-package com.example.visceralmassageapi.service;
+package com.example.visceralmassageapi.articles.service;
 
-import com.example.visceralmassageapi.dto.ArticleCreateRequest;
-import com.example.visceralmassageapi.dto.ArticleResponse;
-import com.example.visceralmassageapi.dto.ArticleUpdateRequest;
-import com.example.visceralmassageapi.entity.Article;
-import com.example.visceralmassageapi.exception.ArticleNotFoundException;
-import com.example.visceralmassageapi.mapper.ArticleMapper;
-import com.example.visceralmassageapi.repository.ArticleRepository;
-import com.example.visceralmassageapi.service.ArticleService;
+import com.example.visceralmassageapi.articles.dto.ArticleCreateRequest;
+import com.example.visceralmassageapi.articles.dto.ArticleResponse;
+import com.example.visceralmassageapi.articles.dto.ArticleUpdateRequest;
+import com.example.visceralmassageapi.articles.exception.ArticleNotFoundException;
+import com.example.visceralmassageapi.articles.mapper.ArticleMapper;
+import com.example.visceralmassageapi.articles.repository.ArticleRepository;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;

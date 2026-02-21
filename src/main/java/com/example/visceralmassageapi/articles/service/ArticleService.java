@@ -1,8 +1,8 @@
-package com.example.visceralmassageapi.service;
+package com.example.visceralmassageapi.articles.service;
 
-import com.example.visceralmassageapi.dto.ArticleCreateRequest;
-import com.example.visceralmassageapi.dto.ArticleResponse;
-import com.example.visceralmassageapi.dto.ArticleUpdateRequest;
+import com.example.visceralmassageapi.articles.dto.ArticleCreateRequest;
+import com.example.visceralmassageapi.articles.dto.ArticleResponse;
+import com.example.visceralmassageapi.articles.dto.ArticleUpdateRequest;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 

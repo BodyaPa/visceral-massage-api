@@ -1,4 +1,4 @@
-package com.example.visceralmassageapi.config;
+package com.example.visceralmassageapi.common.config;
 
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;

@@ -1,4 +1,4 @@
-package com.example.visceralmassageapi.dto;
+package com.example.visceralmassageapi.articles.dto;
 
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.Size;
