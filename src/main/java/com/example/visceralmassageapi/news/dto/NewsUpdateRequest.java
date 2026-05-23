@@ -1,8 +1,8 @@
-package com.example.visceralmassageapi.articles.dto;
+package com.example.visceralmassageapi.news.dto;
 
 import jakarta.validation.constraints.Size;
 
-public class ArticleUpdateRequest {
+public class NewsUpdateRequest {
 
     @Size(max = 255)
     private String title;
@@ -10,8 +10,8 @@ public class ArticleUpdateRequest {
     @Size(max = 255)
     private String content;
 
-    public ArticleUpdateRequest() {}
-    public ArticleUpdateRequest(String title, String content) {
+    public NewsUpdateRequest() {}
+    public NewsUpdateRequest(String title, String content) {
         this.title = title; this.content = content;
     }
 

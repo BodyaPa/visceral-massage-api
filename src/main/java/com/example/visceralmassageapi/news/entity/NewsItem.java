@@ -1,10 +1,10 @@
-package com.example.visceralmassageapi.articles.entity;
+package com.example.visceralmassageapi.news.entity;
 
 import jakarta.persistence.*;
 
 @Entity
-@Table(name = "articles")
-public class Article {
+@Table(name = "news")
+public class NewsItem {
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Integer id;
@@ -15,9 +15,9 @@ public class Article {
     @Column(length = 255)
     private String content;
 
-    public Article() {}
+    public NewsItem() {}
 
-    public Article(Integer id, String title, String content) {
+    public NewsItem(Integer id, String title, String content) {
         this.id = id; this.title = title; this.content = content;
     }
 

@@ -1,12 +1,12 @@
-package com.example.visceralmassageapi.articles.dto;
+package com.example.visceralmassageapi.news.dto;
 
-public class ArticleResponse {
+public class NewsResponse {
     private Integer id;
     private String title;
     private String content;
 
-    public ArticleResponse() {}
-    public ArticleResponse(Integer id, String title, String content) {
+    public NewsResponse() {}
+    public NewsResponse(Integer id, String title, String content) {
         this.id = id; this.title = title; this.content = content;
     }
 

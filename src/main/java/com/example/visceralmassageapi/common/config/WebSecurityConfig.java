@@ -38,7 +38,7 @@ public class WebSecurityConfig {
                         .requestMatchers(HttpMethod.GET, "/api/auth/me").authenticated()
 
                         // public content
-                        .requestMatchers(HttpMethod.GET, "/api/articles/**").permitAll()
+                        .requestMatchers(HttpMethod.GET, "/api/news/**").permitAll()
                         .requestMatchers(HttpMethod.GET, "/api/pages/**").permitAll()
                         .requestMatchers(HttpMethod.GET, "/api/services/**").permitAll()
 
