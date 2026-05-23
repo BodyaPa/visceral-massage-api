@@ -10,9 +10,15 @@ spring:
     hibernate:
       ddl-auto: validate
   flyway:
-    enabled: true
+    locations: classpath:db/migration,classpath:db/dev
 
 jwt:
-  secret: change-me
+  secret: 78bbe6f0953ad86cbe735b8caa59ef14f2a3678c9d0a7bbeef1661644573ffb49e4078eec2da0d0a77909fbb7b2c41f11b0be42893289c5adc574df8923e4faa # random min 32+ com: openssl rand -hex 64
+  issuer: "visceral-massage"
   accessTtlMinutes: 15
   refreshTtlDays: 30
+
+app:
+  cookies:
+    secure: false # dev = false, prod = true
+    sameSite: Lax

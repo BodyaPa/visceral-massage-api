@@ -1,0 +1,17 @@
+spring:
+  main:
+    allow-bean-definition-overriding: true
+  docker:
+    compose:
+      enabled: false
+
+jwt:
+  secret: "test-secret-test-secret-test-secret-test-secret-123456"
+  issuer: "visceral-test"
+  accessTtlMinutes: 15
+  refreshTtlDays: 30
+
+app:
+  cookies:
+    secure: false
+    sameSite: Lax
