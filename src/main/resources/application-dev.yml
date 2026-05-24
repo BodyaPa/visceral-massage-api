@@ -11,6 +11,15 @@ spring:
       ddl-auto: validate
   flyway:
     locations: classpath:db/migration,classpath:db/dev
+  mail:
+    host: localhost
+    port: 1025
+    properties:
+      mail:
+        smtp:
+          auth: false
+          starttls:
+            enable: false
 
 jwt:
   secret: 78bbe6f0953ad86cbe735b8caa59ef14f2a3678c9d0a7bbeef1661644573ffb49e4078eec2da0d0a77909fbb7b2c41f11b0be42893289c5adc574df8923e4faa # random min 32+ com: openssl rand -hex 64
@@ -24,7 +33,8 @@ app:
     sameSite: Lax
   notifications:
     email:
-      transport: disabled
+      transport: smtp
+      from: ${DEV_MAIL_FROM:no-reply@ataraksia.local}
   admin:
     bootstrap:
       enabled: ${ADMIN_BOOTSTRAP_ENABLED:false}
