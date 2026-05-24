@@ -8,6 +8,7 @@ import com.example.visceralmassageapi.auth.dto.RegisterRequest;
 import com.example.visceralmassageapi.auth.dto.UserDto;
 import com.example.visceralmassageapi.auth.repo.RefreshTokenRepository;
 import com.example.visceralmassageapi.auth.repo.UserRepository;
+import com.example.visceralmassageapi.common.audit.AuditLogger;
 import com.example.visceralmassageapi.common.config.CookieProps;
 import com.example.visceralmassageapi.common.exception.BadRequestException;
 import com.example.visceralmassageapi.common.exception.NotFoundException;
@@ -38,6 +39,7 @@ public class AuthService {
     private final PasswordEncoder passwordEncoder;
     private final JwtService jwtService;
     private final CookieProps cookieProps;
+    private final AuditLogger auditLogger;
 
     @Transactional
     public AuthResult register(RegisterRequest req) {
@@ -60,25 +62,35 @@ public class AuthService {
 
         u = userRepository.save(u);
 
-        return issueTokens(u);
+        AuthResult result = issueTokens(u);
+        auditLogger.userRegistered(u.getId());
+        return result;
     }
 
     @Transactional
     public AuthResult login(LoginRequest req) {
         String phone = normalizePhone(req.getPhone());
 
-        User u = userRepository.findByPhone(phone)
-                .orElseThrow(() -> new BadRequestException("Invalid credentials"));
+        User u = userRepository.findByPhone(phone).orElse(null);
+
+        if (u == null) {
+            auditLogger.loginFailed();
+            throw new BadRequestException("Invalid credentials");
+        }
 
         if (!u.isEnabled()) {
+            auditLogger.loginFailed();
             throw new BadRequestException("User disabled");
         }
 
         if (!passwordEncoder.matches(req.getPassword(), u.getPasswordHash())) {
+            auditLogger.loginFailed();
             throw new BadRequestException("Invalid credentials");
         }
 
-        return issueTokens(u);
+        AuthResult result = issueTokens(u);
+        auditLogger.loginSucceeded(u.getId());
+        return result;
     }
 
     @Transactional

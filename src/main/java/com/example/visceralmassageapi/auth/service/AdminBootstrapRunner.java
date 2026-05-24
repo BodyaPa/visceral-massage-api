@@ -3,6 +3,7 @@ package com.example.visceralmassageapi.auth.service;
 import com.example.visceralmassageapi.auth.domain.User;
 import com.example.visceralmassageapi.auth.domain.UserRole;
 import com.example.visceralmassageapi.auth.repo.UserRepository;
+import com.example.visceralmassageapi.common.audit.AuditLogger;
 import com.example.visceralmassageapi.common.config.AdminBootstrapProps;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -27,6 +28,7 @@ public class AdminBootstrapRunner implements ApplicationRunner {
     private final AdminBootstrapProps properties;
     private final UserRepository userRepository;
     private final PasswordEncoder passwordEncoder;
+    private final AuditLogger auditLogger;
 
     @Override
     @Transactional
@@ -58,7 +60,7 @@ public class AdminBootstrapRunner implements ApplicationRunner {
         admin.setEnabled(true);
         userRepository.save(admin);
 
-        log.info("Initial admin user created through configured bootstrap.");
+        auditLogger.adminBootstrapCreated();
     }
 
     private String required(String value, String environmentVariable) {

@@ -1,5 +1,6 @@
 package com.example.visceralmassageapi.common.config;
 
+import com.example.visceralmassageapi.common.security.AuditAccessDeniedHandler;
 import com.example.visceralmassageapi.common.security.JwtAuthenticationFilter;
 import com.example.visceralmassageapi.common.security.JwtService;
 import org.springframework.context.annotation.Bean;
@@ -19,11 +20,13 @@ import java.util.List;
 public class WebSecurityConfig {
 
     @Bean
-    SecurityFilterChain securityFilterChain(HttpSecurity http, JwtService jwtService) throws Exception {
+    SecurityFilterChain securityFilterChain(HttpSecurity http, JwtService jwtService,
+                                            AuditAccessDeniedHandler auditAccessDeniedHandler) throws Exception {
         http
                 .csrf(csrf -> csrf.disable())
                 .cors(Customizer.withDefaults())
                 .sessionManagement(sm -> sm.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
+                .exceptionHandling(ex -> ex.accessDeniedHandler(auditAccessDeniedHandler))
                 .authorizeHttpRequests(auth -> auth
                         // DEV preflight
                         .requestMatchers(HttpMethod.OPTIONS, "/**").permitAll()
