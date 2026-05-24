@@ -8,11 +8,18 @@ import org.springframework.stereotype.Service;
 import javax.crypto.SecretKey;
 import java.nio.charset.StandardCharsets;
 import java.time.Instant;
+import java.time.OffsetDateTime;
+import java.time.ZoneOffset;
 import java.time.temporal.ChronoUnit;
 import java.util.Date;
+import java.util.UUID;
 
 @Service
 public class JwtService {
+
+    private static final String TOKEN_TYPE_CLAIM = "token_type";
+    private static final String ACCESS_TOKEN_TYPE = "access";
+    private static final String REFRESH_TOKEN_TYPE = "refresh";
 
     private final SecretKey key;
     private final String issuer;
@@ -37,6 +44,7 @@ public class JwtService {
                 .issuer(issuer)
                 .subject(Long.toString(userId))
                 .claim("role", role)
+                .claim(TOKEN_TYPE_CLAIM, ACCESS_TOKEN_TYPE)
                 .issuedAt(Date.from(now))
                 .expiration(Date.from(now.plus(accessTtlMinutes, ChronoUnit.MINUTES)))
                 .signWith(key)
@@ -48,6 +56,8 @@ public class JwtService {
         return Jwts.builder()
                 .issuer(issuer)
                 .subject(Long.toString(userId))
+                .id(UUID.randomUUID().toString())
+                .claim(TOKEN_TYPE_CLAIM, REFRESH_TOKEN_TYPE)
                 .issuedAt(Date.from(now))
                 .expiration(Date.from(now.plus(refreshTtlDays, ChronoUnit.DAYS)))
                 .signWith(key)
@@ -57,6 +67,7 @@ public class JwtService {
     public Jws<Claims> parse(String token) {
         return Jwts.parser()
                 .verifyWith(key)
+                .requireIssuer(issuer)
                 .build()
                 .parseSignedClaims(token);
     }
@@ -68,6 +79,18 @@ public class JwtService {
     public String getRoleOrNull(String token) {
         Object v = parse(token).getPayload().get("role");
         return v == null ? null : v.toString();
+    }
+
+    public boolean isAccessToken(String token) {
+        return ACCESS_TOKEN_TYPE.equals(parse(token).getPayload().get(TOKEN_TYPE_CLAIM));
+    }
+
+    public boolean isRefreshToken(String token) {
+        return REFRESH_TOKEN_TYPE.equals(parse(token).getPayload().get(TOKEN_TYPE_CLAIM));
+    }
+
+    public OffsetDateTime getExpiration(String token) {
+        return OffsetDateTime.ofInstant(parse(token).getPayload().getExpiration().toInstant(), ZoneOffset.UTC);
     }
 
     public int getAccessTtlSeconds() {

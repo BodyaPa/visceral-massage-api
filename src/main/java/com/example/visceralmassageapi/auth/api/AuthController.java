@@ -1,11 +1,9 @@
 package com.example.visceralmassageapi.auth.api;
 
-import com.example.visceralmassageapi.auth.domain.User;
 import com.example.visceralmassageapi.auth.dto.LoginRequest;
 import com.example.visceralmassageapi.auth.dto.RegisterRequest;
 import com.example.visceralmassageapi.auth.dto.UserDto;
 import com.example.visceralmassageapi.auth.service.AuthService;
-import com.example.visceralmassageapi.common.exception.NotFoundException;
 import jakarta.servlet.http.Cookie;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.validation.Valid;
@@ -55,7 +53,9 @@ public class AuthController {
     }
 
     @PostMapping("/logout")
-    public ResponseEntity<Void> logout() {
+    public ResponseEntity<Void> logout(HttpServletRequest request) {
+        authService.logout(readOptionalCookie(request, AuthService.REFRESH_COOKIE));
+
         return ResponseEntity.noContent()
                 .header(HttpHeaders.SET_COOKIE, authService.clearAccessCookie().toString())
                 .header(HttpHeaders.SET_COOKIE, authService.clearRefreshCookie().toString())
@@ -77,5 +77,14 @@ public class AuthController {
             if (name.equals(c.getName())) return c.getValue();
         }
         throw new IllegalArgumentException("Missing cookie: " + name);
+    }
+
+    private String readOptionalCookie(HttpServletRequest req, String name) {
+        Cookie[] cookies = req.getCookies();
+        if (cookies == null) return null;
+        for (Cookie c : cookies) {
+            if (name.equals(c.getName())) return c.getValue();
+        }
+        return null;
     }
 }

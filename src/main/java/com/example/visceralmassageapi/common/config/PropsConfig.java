@@ -4,5 +4,5 @@ import org.springframework.boot.context.properties.EnableConfigurationProperties
 import org.springframework.context.annotation.Configuration;
 
 @Configuration
-@EnableConfigurationProperties(CookieProps.class)
+@EnableConfigurationProperties({CookieProps.class, AdminBootstrapProps.class})
 public class PropsConfig {}

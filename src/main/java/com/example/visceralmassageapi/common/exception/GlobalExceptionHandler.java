@@ -8,6 +8,7 @@ import org.springframework.validation.FieldError;
 import org.springframework.web.bind.MethodArgumentNotValidException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
+import org.springframework.web.HttpRequestMethodNotSupportedException;
 
 import java.time.OffsetDateTime;
 import java.util.List;
@@ -39,6 +40,14 @@ public class GlobalExceptionHandler {
     @ExceptionHandler(AccessDeniedException.class)
     public ResponseEntity<ApiErrorResponse> accessDenied(AccessDeniedException ex, HttpServletRequest req) {
         return build(HttpStatus.FORBIDDEN, "Forbidden", req, null);
+    }
+
+    @ExceptionHandler(HttpRequestMethodNotSupportedException.class)
+    public ResponseEntity<ApiErrorResponse> methodNotAllowed(
+            HttpRequestMethodNotSupportedException ex,
+            HttpServletRequest req
+    ) {
+        return build(HttpStatus.METHOD_NOT_ALLOWED, "Method not allowed", req, null);
     }
 
     @ExceptionHandler(IllegalArgumentException.class)

@@ -22,3 +22,9 @@ app:
   cookies:
     secure: false # dev = false, prod = true
     sameSite: Lax
+  admin:
+    bootstrap:
+      enabled: ${ADMIN_BOOTSTRAP_ENABLED:false}
+      phone: ${ADMIN_BOOTSTRAP_PHONE:}
+      email: ${ADMIN_BOOTSTRAP_EMAIL:}
+      password: ${ADMIN_BOOTSTRAP_PASSWORD:}

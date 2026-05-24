@@ -1,20 +1,29 @@
 package com.example.visceralmassageapi.auth.service;
 
+import com.example.visceralmassageapi.auth.domain.RefreshToken;
 import com.example.visceralmassageapi.auth.domain.User;
 import com.example.visceralmassageapi.auth.domain.UserRole;
 import com.example.visceralmassageapi.auth.dto.LoginRequest;
 import com.example.visceralmassageapi.auth.dto.RegisterRequest;
 import com.example.visceralmassageapi.auth.dto.UserDto;
+import com.example.visceralmassageapi.auth.repo.RefreshTokenRepository;
 import com.example.visceralmassageapi.auth.repo.UserRepository;
 import com.example.visceralmassageapi.common.config.CookieProps;
 import com.example.visceralmassageapi.common.exception.BadRequestException;
+import com.example.visceralmassageapi.common.exception.NotFoundException;
 import com.example.visceralmassageapi.common.security.JwtService;
+import io.jsonwebtoken.JwtException;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.ResponseCookie;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
-import com.example.visceralmassageapi.common.exception.NotFoundException;
+import org.springframework.transaction.annotation.Transactional;
 
+import java.nio.charset.StandardCharsets;
+import java.security.MessageDigest;
+import java.security.NoSuchAlgorithmException;
+import java.time.OffsetDateTime;
+import java.util.HexFormat;
 import java.util.Locale;
 
 @Service
@@ -25,10 +34,12 @@ public class AuthService {
     public static final String REFRESH_COOKIE = "refresh_token";
 
     private final UserRepository userRepository;
+    private final RefreshTokenRepository refreshTokenRepository;
     private final PasswordEncoder passwordEncoder;
     private final JwtService jwtService;
     private final CookieProps cookieProps;
 
+    @Transactional
     public AuthResult register(RegisterRequest req) {
         String phone = normalizePhone(req.getPhone());
         String email = normalizeEmail(req.getEmail());
@@ -52,6 +63,7 @@ public class AuthService {
         return issueTokens(u);
     }
 
+    @Transactional
     public AuthResult login(LoginRequest req) {
         String phone = normalizePhone(req.getPhone());
 
@@ -69,17 +81,27 @@ public class AuthService {
         return issueTokens(u);
     }
 
+    @Transactional
     public AuthResult refresh(String refreshToken) {
-        long userId = jwtService.getUserId(refreshToken);
-
-        User u = userRepository.findById(userId)
-                .orElseThrow(() -> new BadRequestException("Invalid refresh token"));
+        RefreshToken storedToken = requireActiveRefreshToken(refreshToken);
+        User u = storedToken.getUser();
 
         if (!u.isEnabled()) {
             throw new BadRequestException("User disabled");
         }
 
+        storedToken.setRevokedAt(OffsetDateTime.now());
         return issueTokens(u);
+    }
+
+    @Transactional
+    public void logout(String refreshToken) {
+        if (refreshToken == null || refreshToken.isBlank()) {
+            return;
+        }
+
+        refreshTokenRepository.findByTokenHashAndRevokedAtIsNull(hashToken(refreshToken))
+                .ifPresent(token -> token.setRevokedAt(OffsetDateTime.now()));
     }
 
     public ResponseCookie buildAccessCookie(String token) {
@@ -112,11 +134,49 @@ public class AuthService {
         String access = jwtService.generateAccessToken(u.getId(), u.getRole().name());
         String refresh = jwtService.generateRefreshToken(u.getId());
 
+        RefreshToken storedToken = new RefreshToken();
+        storedToken.setUser(u);
+        storedToken.setTokenHash(hashToken(refresh));
+        storedToken.setExpiresAt(jwtService.getExpiration(refresh));
+        refreshTokenRepository.save(storedToken);
+
         return new AuthResult(
                 u,
                 buildAccessCookie(access),
                 buildRefreshCookie(refresh)
         );
+    }
+
+    private RefreshToken requireActiveRefreshToken(String token) {
+        try {
+            if (!jwtService.isRefreshToken(token)) {
+                throw new BadRequestException("Invalid refresh token");
+            }
+
+            long userId = jwtService.getUserId(token);
+            RefreshToken storedToken = refreshTokenRepository
+                    .findByTokenHashAndRevokedAtIsNull(hashToken(token))
+                    .orElseThrow(() -> new BadRequestException("Invalid refresh token"));
+
+            if (!storedToken.getUser().getId().equals(userId)
+                    || !storedToken.getExpiresAt().isAfter(OffsetDateTime.now())) {
+                throw new BadRequestException("Invalid refresh token");
+            }
+
+            return storedToken;
+        } catch (JwtException | IllegalArgumentException ex) {
+            throw new BadRequestException("Invalid refresh token");
+        }
+    }
+
+    private String hashToken(String token) {
+        try {
+            byte[] digest = MessageDigest.getInstance("SHA-256")
+                    .digest(token.getBytes(StandardCharsets.UTF_8));
+            return HexFormat.of().formatHex(digest);
+        } catch (NoSuchAlgorithmException ex) {
+            throw new IllegalStateException("SHA-256 algorithm is not available", ex);
+        }
     }
 
     private String normalizePhone(String phone) {
