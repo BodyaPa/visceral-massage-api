@@ -22,6 +22,9 @@ app:
   cookies:
     secure: false # dev = false, prod = true
     sameSite: Lax
+  notifications:
+    email:
+      transport: disabled
   admin:
     bootstrap:
       enabled: ${ADMIN_BOOTSTRAP_ENABLED:false}

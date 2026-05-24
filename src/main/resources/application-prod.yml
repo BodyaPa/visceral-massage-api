@@ -34,6 +34,9 @@ app:
   cookies:
     secure: true
     sameSite: Lax
+  notifications:
+    email:
+      transport: disabled
   admin:
     bootstrap:
       enabled: ${ADMIN_BOOTSTRAP_ENABLED:false}
