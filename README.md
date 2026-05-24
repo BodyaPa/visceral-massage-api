@@ -54,6 +54,33 @@ To select the profile explicitly:
 SPRING_PROFILES_ACTIVE=dev ./gradlew bootRun
 ```
 
+## Staging Email Catcher
+
+The `staging` profile keeps production-like database, cookie and CORS settings,
+but sends application email only to the Mailpit service on the private Compose
+network. It does not expose a staging email test API.
+
+Start staging from `deploy/` using the production base file and the staging
+override:
+
+```bash
+docker compose -f docker-compose.prod.yml -f docker-compose.staging.yml up -d --build
+```
+
+Set database, JWT and CORS values through deployment secrets as for production.
+`STAGING_MAIL_FROM` can override the non-production sender address.
+
+Mailpit SMTP is not published from the staging host. Its Web UI is bound only
+to `127.0.0.1` on the host, on port `8025` by default. Inspect captured email
+from an administrator workstation through an SSH tunnel:
+
+```bash
+ssh -L 8025:127.0.0.1:8025 user@staging-host
+```
+
+Then open `http://127.0.0.1:8025` locally. Do not reverse-proxy this UI as a
+public staging route.
+
 ## Sensitive Configuration
 
 Do not commit JWT secrets, admin bootstrap credentials, SMTP credentials or
