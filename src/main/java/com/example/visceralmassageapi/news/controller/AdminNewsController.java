@@ -29,7 +29,7 @@ public class AdminNewsController {
     }
 
     @PatchMapping("/{id}")
-    public NewsResponse patch(@PathVariable Integer id, @RequestBody NewsUpdateRequest request) {
+    public NewsResponse patch(@PathVariable Integer id, @Valid @RequestBody NewsUpdateRequest request) {
         return service.updatePatch(id, request);
     }
 

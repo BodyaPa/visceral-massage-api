@@ -1,6 +1,8 @@
 package com.example.visceralmassageapi.news.exception;
 
-public class NewsNotFoundException extends RuntimeException {
+import com.example.visceralmassageapi.common.exception.NotFoundException;
+
+public class NewsNotFoundException extends NotFoundException {
     public NewsNotFoundException(Integer id) {
         super("News item not found: " + id);
     }

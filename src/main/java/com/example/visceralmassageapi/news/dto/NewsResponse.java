@@ -2,15 +2,23 @@ package com.example.visceralmassageapi.news.dto;
 
 public class NewsResponse {
     private Integer id;
-    private String title;
-    private String content;
+    private String titleUa;
+    private String contentUa;
+    private String titleEn;
+    private String contentEn;
 
     public NewsResponse() {}
-    public NewsResponse(Integer id, String title, String content) {
-        this.id = id; this.title = title; this.content = content;
+    public NewsResponse(Integer id, String titleUa, String contentUa, String titleEn, String contentEn) {
+        this.id = id;
+        this.titleUa = titleUa;
+        this.contentUa = contentUa;
+        this.titleEn = titleEn;
+        this.contentEn = contentEn;
     }
 
     public Integer getId() { return id; }
-    public String getTitle() { return title; }
-    public String getContent() { return content; }
+    public String getTitleUa() { return titleUa; }
+    public String getContentUa() { return contentUa; }
+    public String getTitleEn() { return titleEn; }
+    public String getContentEn() { return contentEn; }
 }

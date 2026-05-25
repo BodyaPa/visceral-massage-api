@@ -1,7 +1,7 @@
--- R__001__insert_test_news.sql
+-- R__001__insert_test_news_ua.sql
 
-INSERT INTO news (title, content)
-SELECT seed.title, seed.content
+INSERT INTO news (title_ua, content_ua)
+SELECT seed.title_ua, seed.content_ua
 FROM (VALUES
                                           ('Що таке вісцеральна терапія?', '**Вісцеральна терапія** — це м''яка мануальна методика, що спрямована на нормалізацію положення, тонусу та рухливості внутрішніх органів шляхом впливу на зв''язковий апарат і фасції.
 
@@ -106,7 +106,7 @@ FROM (VALUES
 
 ### Скільки коштує сеанс?
 Ціна залежить від міста, кваліфікації фахівця та тривалості сеансу.')
-) AS seed(title, content)
+    ) AS seed(title_ua, content_ua)
 WHERE NOT EXISTS (
-    SELECT 1 FROM news existing WHERE existing.title = seed.title
+    SELECT 1 FROM news existing WHERE existing.title_ua = seed.title_ua
 );

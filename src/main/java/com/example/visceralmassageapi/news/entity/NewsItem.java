@@ -9,24 +9,40 @@ public class NewsItem {
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Integer id;
 
-    @Column(length = 255)
-    private String title;
+    @Column(name = "title_ua", length = 255)
+    private String titleUa;
 
-    @Column(length = 255)
-    private String content;
+    @Column(name = "content_ua", columnDefinition = "TEXT")
+    private String contentUa;
+
+    @Column(name = "title_en", length = 255)
+    private String titleEn;
+
+    @Column(name = "content_en", columnDefinition = "TEXT")
+    private String contentEn;
 
     public NewsItem() {}
 
-    public NewsItem(Integer id, String title, String content) {
-        this.id = id; this.title = title; this.content = content;
+    public NewsItem(Integer id, String titleUa, String contentUa, String titleEn, String contentEn) {
+        this.id = id;
+        this.titleUa = titleUa;
+        this.contentUa = contentUa;
+        this.titleEn = titleEn;
+        this.contentEn = contentEn;
     }
 
     public Integer getId() { return id; }
     public void setId(Integer id) { this.id = id; }
 
-    public String getTitle() { return title; }
-    public void setTitle(String title) { this.title = title; }
+    public String getTitleUa() { return titleUa; }
+    public void setTitleUa(String titleUa) { this.titleUa = titleUa; }
 
-    public String getContent() { return content; }
-    public void setContent(String content) { this.content = content; }
+    public String getContentUa() { return contentUa; }
+    public void setContentUa(String contentUa) { this.contentUa = contentUa; }
+
+    public String getTitleEn() { return titleEn; }
+    public void setTitleEn(String titleEn) { this.titleEn = titleEn; }
+
+    public String getContentEn() { return contentEn; }
+    public void setContentEn(String contentEn) { this.contentEn = contentEn; }
 }

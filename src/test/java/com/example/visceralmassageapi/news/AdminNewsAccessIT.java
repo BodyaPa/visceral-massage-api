@@ -32,7 +32,7 @@ class AdminNewsAccessIT extends IntegrationTestBase {
 
     @Test
     void publicNewsRead_isAvailableWithoutAuthentication() throws Exception {
-        mvc.perform(get("/api/news"))
+        mvc.perform(get("/api/news").param("lang", "ua"))
                 .andExpect(status().isOk());
     }
 
@@ -75,19 +75,33 @@ class AdminNewsAccessIT extends IntegrationTestBase {
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(newsBody("Admin news")))
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$.title").value("Admin news"))
+                .andExpect(jsonPath("$.titleUa").value("Admin news"))
                 .andReturn();
 
         int id = objectMapper.readTree(result.getResponse().getContentAsString()).path("id").asInt();
+
+        mvc.perform(get("/api/news/{id}", id).param("lang", "ua"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.title").value("Admin news"))
+                .andExpect(jsonPath("$.translationAvailable").value(true));
+
+        mvc.perform(get("/api/news/{id}", id).param("lang", "en"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.translationAvailable").value(false));
 
         mvc.perform(patch("/api/admin/news/{id}", id).with(csrf())
                         .cookie(adminCookies)
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("""
-                                {"title":"Updated by admin"}
+                                {"titleEn":"Updated by admin","contentEn":"English content"}
                                 """))
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$.title").value("Updated by admin"));
+                .andExpect(jsonPath("$.titleEn").value("Updated by admin"));
+
+        mvc.perform(get("/api/news/{id}", id).param("lang", "en"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.title").value("Updated by admin"))
+                .andExpect(jsonPath("$.translationAvailable").value(true));
 
         mvc.perform(delete("/api/admin/news/{id}", id).with(csrf()).cookie(adminCookies))
                 .andExpect(status().isNoContent());
@@ -102,6 +116,25 @@ class AdminNewsAccessIT extends IntegrationTestBase {
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(newsBody("Blocked CSRF")))
                 .andExpect(status().isForbidden());
+    }
+
+    @Test
+    void adminCannotCreateNewsWithIncompleteTranslation() throws Exception {
+        Cookie[] adminCookies = loginAdminCookies();
+
+        mvc.perform(post("/api/admin/news").with(csrf())
+                        .cookie(adminCookies)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {"titleUa":"Only a title"}
+                                """))
+                .andExpect(status().isBadRequest());
+    }
+
+    @Test
+    void publicNewsRejectsUnsupportedLocale() throws Exception {
+        mvc.perform(get("/api/news").param("lang", "pl"))
+                .andExpect(status().isBadRequest());
     }
 
     private Cookie[] registerUserCookies(String phone) throws Exception {
@@ -130,7 +163,7 @@ class AdminNewsAccessIT extends IntegrationTestBase {
 
     private String newsBody(String title) {
         return """
-                {"title":"%s","content":"Protected content"}
+                {"titleUa":"%s","contentUa":"Protected content"}
                 """.formatted(title);
     }
 }

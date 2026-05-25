@@ -67,7 +67,7 @@ class AuditLoggingIT extends IntegrationTestBase {
                         .cookie(userCookies)
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("""
-                                {"title":"Not persisted","content":"Not persisted"}
+                                {"titleUa":"Not persisted","contentUa":"Not persisted"}
                                 """))
                 .andExpect(status().isForbidden());
 
