@@ -40,6 +40,29 @@ Run the API:
 docker compose -f compose.yaml config --quiet
 ```
 
+## Browser Authentication Security
+
+The API authenticates browser requests with `HttpOnly` access and refresh
+cookies. Unsafe requests also require a CSRF token:
+
+1. Call `GET /api/auth/csrf` with credentials enabled.
+2. Read the returned JSON `token` value.
+3. Send that value in the `X-XSRF-TOKEN` header on `POST`, `PUT`, `PATCH` and
+   `DELETE` requests while allowing the browser to send cookies.
+
+The `XSRF-TOKEN` cookie is `HttpOnly`; application code should use the JSON
+token, not read cookies. Registration passwords must contain at least 12
+characters, including uppercase and lowercase letters, a number and a special
+character. Allowed browser origins are configured through
+`app.cors.allowed-origins`; staging and production take values from
+`CORS_ALLOWED_ORIGINS`.
+
+Registration stores a validated first and last name and requires at least one
+contact method: phone or email. Login accepts one `identifier` field containing
+either value and returns the same invalid-credentials response for failed
+attempts. Ukrainian phone values accept either canonical `+380...` or local
+`0XXXXXXXXX` input; local input is normalized to canonical storage.
+
 ## Local Email Catcher
 
 The `dev` profile sends application email through Mailpit instead of a real

@@ -1,14 +1,17 @@
 package com.example.visceralmassageapi.auth.dto;
 
 import jakarta.validation.constraints.NotBlank;
+import jakarta.validation.constraints.Size;
 import lombok.Getter;
 import lombok.Setter;
 
 @Getter @Setter
 public class LoginRequest {
     @NotBlank
-    private String phone;
+    @Size(max = 254)
+    private String identifier;
 
     @NotBlank
+    @Size(max = 128)
     private String password;
 }

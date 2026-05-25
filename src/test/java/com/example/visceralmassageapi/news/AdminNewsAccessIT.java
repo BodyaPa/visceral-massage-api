@@ -10,6 +10,7 @@ import org.springframework.test.context.DynamicPropertyRegistry;
 import org.springframework.test.context.DynamicPropertySource;
 import org.springframework.test.web.servlet.MockMvc;
 
+import static org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.csrf;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.*;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.*;
 
@@ -37,7 +38,7 @@ class AdminNewsAccessIT extends IntegrationTestBase {
 
     @Test
     void anonymousCannotCreateNewsThroughAdminEndpoint() throws Exception {
-        mvc.perform(post("/api/admin/news")
+        mvc.perform(post("/api/admin/news").with(csrf())
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(newsBody("Blocked anonymous")))
                 .andExpect(status().isForbidden());
@@ -47,7 +48,7 @@ class AdminNewsAccessIT extends IntegrationTestBase {
     void regularUserCannotCreateNewsThroughAdminEndpoint() throws Exception {
         Cookie[] userCookies = registerUserCookies("+380000000097");
 
-        mvc.perform(post("/api/admin/news")
+        mvc.perform(post("/api/admin/news").with(csrf())
                         .cookie(userCookies)
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(newsBody("Blocked user")))
@@ -58,7 +59,7 @@ class AdminNewsAccessIT extends IntegrationTestBase {
     void authenticatedUserCannotCreateNewsThroughPublicEndpoint() throws Exception {
         Cookie[] userCookies = registerUserCookies("+380000000096");
 
-        mvc.perform(post("/api/news")
+        mvc.perform(post("/api/news").with(csrf())
                         .cookie(userCookies)
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(newsBody("No public mutation")))
@@ -69,7 +70,7 @@ class AdminNewsAccessIT extends IntegrationTestBase {
     void adminCanManageNewsThroughAdminEndpoint() throws Exception {
         Cookie[] adminCookies = loginAdminCookies();
 
-        var result = mvc.perform(post("/api/admin/news")
+        var result = mvc.perform(post("/api/admin/news").with(csrf())
                         .cookie(adminCookies)
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(newsBody("Admin news")))
@@ -79,7 +80,7 @@ class AdminNewsAccessIT extends IntegrationTestBase {
 
         int id = objectMapper.readTree(result.getResponse().getContentAsString()).path("id").asInt();
 
-        mvc.perform(patch("/api/admin/news/{id}", id)
+        mvc.perform(patch("/api/admin/news/{id}", id).with(csrf())
                         .cookie(adminCookies)
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("""
@@ -88,15 +89,26 @@ class AdminNewsAccessIT extends IntegrationTestBase {
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.title").value("Updated by admin"));
 
-        mvc.perform(delete("/api/admin/news/{id}", id).cookie(adminCookies))
+        mvc.perform(delete("/api/admin/news/{id}", id).with(csrf()).cookie(adminCookies))
                 .andExpect(status().isNoContent());
     }
 
+    @Test
+    void adminMutationWithoutCsrfToken_isRejected() throws Exception {
+        Cookie[] adminCookies = loginAdminCookies();
+
+        mvc.perform(post("/api/admin/news")
+                        .cookie(adminCookies)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(newsBody("Blocked CSRF")))
+                .andExpect(status().isForbidden());
+    }
+
     private Cookie[] registerUserCookies(String phone) throws Exception {
-        return mvc.perform(post("/api/auth/register")
+        return mvc.perform(post("/api/auth/register").with(csrf())
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("""
-                                {"phone":"%s","email":null,"password":"Passw0rd!"}
+                                {"phone":"%s","email":null,"firstName":"Iryna","lastName":"Koval","password":"Passw0rd!Secure"}
                                 """.formatted(phone)))
                 .andExpect(status().isOk())
                 .andReturn()
@@ -105,10 +117,10 @@ class AdminNewsAccessIT extends IntegrationTestBase {
     }
 
     private Cookie[] loginAdminCookies() throws Exception {
-        return mvc.perform(post("/api/auth/login")
+        return mvc.perform(post("/api/auth/login").with(csrf())
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("""
-                                {"phone":"%s","password":"%s"}
+                                {"identifier":"%s","password":"%s"}
                                 """.formatted(ADMIN_PHONE, ADMIN_PASSWORD)))
                 .andExpect(status().isOk())
                 .andReturn()

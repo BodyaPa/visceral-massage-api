@@ -6,12 +6,15 @@ import com.example.visceralmassageapi.auth.dto.UserDto;
 import com.example.visceralmassageapi.auth.service.AuthService;
 import jakarta.servlet.http.Cookie;
 import jakarta.servlet.http.HttpServletRequest;
+import jakarta.servlet.http.HttpServletResponse;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 import org.springframework.security.core.Authentication;
+import org.springframework.security.web.csrf.CookieCsrfTokenRepository;
+import org.springframework.security.web.csrf.CsrfToken;
 
 
 @RestController
@@ -20,6 +23,7 @@ import org.springframework.security.core.Authentication;
 public class AuthController {
 
     private final AuthService authService;
+    private final CookieCsrfTokenRepository csrfTokenRepository;
 
     @PostMapping("/register")
     public ResponseEntity<UserDto> register(@Valid @RequestBody RegisterRequest req) {
@@ -60,6 +64,13 @@ public class AuthController {
                 .header(HttpHeaders.SET_COOKIE, authService.clearAccessCookie().toString())
                 .header(HttpHeaders.SET_COOKIE, authService.clearRefreshCookie().toString())
                 .build();
+    }
+
+    @GetMapping("/csrf")
+    public CsrfToken csrf(HttpServletRequest request, HttpServletResponse response) {
+        CsrfToken token = csrfTokenRepository.generateToken(request);
+        csrfTokenRepository.saveToken(token, request, response);
+        return token;
     }
 
     @GetMapping("/me")

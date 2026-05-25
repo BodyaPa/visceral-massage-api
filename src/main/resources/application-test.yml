@@ -12,6 +12,9 @@ jwt:
   refreshTtlDays: 30
 
 app:
+  cors:
+    allowed-origins:
+      - http://localhost:3000
   cookies:
     secure: false
     sameSite: Lax

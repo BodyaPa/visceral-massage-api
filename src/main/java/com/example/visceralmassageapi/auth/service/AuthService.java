@@ -43,19 +43,24 @@ public class AuthService {
 
     @Transactional
     public AuthResult register(RegisterRequest req) {
-        String phone = normalizePhone(req.getPhone());
+        String phone = normalizeOptionalPhone(req.getPhone());
         String email = normalizeEmail(req.getEmail());
+        String firstName = normalizeName(req.getFirstName());
+        String lastName = normalizeName(req.getLastName());
 
-        if (userRepository.existsByPhone(phone)) {
-            throw new BadRequestException("Phone already exists");
+        if (phone == null && email == null) {
+            throw new BadRequestException("Phone or email is required");
         }
-        if (email != null && userRepository.existsByEmail(email)) {
-            throw new BadRequestException("Email already exists");
+        if (phone != null && userRepository.existsByPhone(phone)
+                || email != null && userRepository.existsByEmail(email)) {
+            throw new BadRequestException("Account already registered");
         }
 
         User u = new User();
         u.setPhone(phone);
         u.setEmail(email);
+        u.setFirstName(firstName);
+        u.setLastName(lastName);
         u.setPasswordHash(passwordEncoder.encode(req.getPassword()));
         u.setRole(UserRole.USER);
         u.setEnabled(true);
@@ -69,9 +74,7 @@ public class AuthService {
 
     @Transactional
     public AuthResult login(LoginRequest req) {
-        String phone = normalizePhone(req.getPhone());
-
-        User u = userRepository.findByPhone(phone).orElse(null);
+        User u = findByIdentifier(req.getIdentifier());
 
         if (u == null) {
             auditLogger.loginFailed();
@@ -80,7 +83,7 @@ public class AuthService {
 
         if (!u.isEnabled()) {
             auditLogger.loginFailed();
-            throw new BadRequestException("User disabled");
+            throw new BadRequestException("Invalid credentials");
         }
 
         if (!passwordEncoder.matches(req.getPassword(), u.getPasswordHash())) {
@@ -191,17 +194,37 @@ public class AuthService {
         }
     }
 
-    private String normalizePhone(String phone) {
-        if (phone == null || phone.isBlank()) {
-            throw new BadRequestException("Phone is required");
+    private User findByIdentifier(String identifier) {
+        String value = identifier.trim();
+        if (value.contains("@")) {
+            return userRepository.findByEmail(normalizeEmail(value)).orElse(null);
         }
 
+        try {
+            return userRepository.findByPhone(normalizePhone(value)).orElse(null);
+        } catch (BadRequestException ex) {
+            return null;
+        }
+    }
+
+    private String normalizeOptionalPhone(String phone) {
+        if (phone == null || phone.isBlank()) {
+            return null;
+        }
+        return normalizePhone(phone);
+    }
+
+    private String normalizePhone(String phone) {
         String cleaned = phone
                 .trim()
                 .replace(" ", "")
                 .replace("-", "")
                 .replace("(", "")
                 .replace(")", "");
+
+        if (cleaned.matches("^0\\d{9}$")) {
+            cleaned = "+380" + cleaned.substring(1);
+        }
 
         if (!cleaned.startsWith("+")) {
             cleaned = "+" + cleaned;
@@ -221,15 +244,21 @@ public class AuthService {
         return e.isBlank() ? null : e;
     }
 
+    private String normalizeName(String name) {
+        return name.trim().replaceAll("\\s+", " ");
+    }
+
     public record AuthResult(User user, ResponseCookie accessCookie, ResponseCookie refreshCookie) {
         public UserDto userDto() {
-            return new UserDto(user.getId(), user.getPhone(), user.getEmail(), user.getRole());
+            return new UserDto(user.getId(), user.getPhone(), user.getEmail(),
+                    user.getFirstName(), user.getLastName(), user.getRole());
         }
     }
 
     public UserDto me(long userId) {
         User u = userRepository.findById(userId)
                 .orElseThrow(() -> new NotFoundException("User not found"));
-        return new UserDto(u.getId(), u.getPhone(), u.getEmail(), u.getRole());
+        return new UserDto(u.getId(), u.getPhone(), u.getEmail(),
+                u.getFirstName(), u.getLastName(), u.getRole());
     }
 }

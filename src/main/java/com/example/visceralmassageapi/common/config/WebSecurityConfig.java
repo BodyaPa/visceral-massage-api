@@ -5,11 +5,12 @@ import com.example.visceralmassageapi.common.security.JwtAuthenticationFilter;
 import com.example.visceralmassageapi.common.security.JwtService;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
-import org.springframework.context.annotation.Profile;
 import org.springframework.http.HttpMethod;
 import org.springframework.security.config.Customizer;
 import org.springframework.security.config.annotation.web.builders.HttpSecurity;
 import org.springframework.security.config.http.SessionCreationPolicy;
+import org.springframework.security.web.csrf.CookieCsrfTokenRepository;
+import org.springframework.security.web.csrf.CsrfTokenRequestAttributeHandler;
 import org.springframework.security.web.SecurityFilterChain;
 import org.springframework.security.web.authentication.UsernamePasswordAuthenticationFilter;
 import org.springframework.web.cors.*;
@@ -21,9 +22,12 @@ public class WebSecurityConfig {
 
     @Bean
     SecurityFilterChain securityFilterChain(HttpSecurity http, JwtService jwtService,
-                                            AuditAccessDeniedHandler auditAccessDeniedHandler) throws Exception {
+                                            AuditAccessDeniedHandler auditAccessDeniedHandler,
+                                            CookieCsrfTokenRepository csrfTokenRepository) throws Exception {
         http
-                .csrf(csrf -> csrf.disable())
+                .csrf(csrf -> csrf
+                        .csrfTokenRepository(csrfTokenRepository)
+                        .csrfTokenRequestHandler(new CsrfTokenRequestAttributeHandler()))
                 .cors(Customizer.withDefaults())
                 .sessionManagement(sm -> sm.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
                 .exceptionHandling(ex -> ex.accessDeniedHandler(auditAccessDeniedHandler))
@@ -36,6 +40,7 @@ public class WebSecurityConfig {
                         .requestMatchers(HttpMethod.POST, "/api/auth/register").permitAll()
                         .requestMatchers(HttpMethod.POST, "/api/auth/refresh").permitAll()
                         .requestMatchers(HttpMethod.POST, "/api/auth/logout").permitAll()
+                        .requestMatchers(HttpMethod.GET, "/api/auth/csrf").permitAll()
 
                         // but ME must require login
                         .requestMatchers(HttpMethod.GET, "/api/auth/me").authenticated()
@@ -60,18 +65,21 @@ public class WebSecurityConfig {
     }
 
     @Bean
-    @Profile("dev")
-    CorsConfigurationSource corsConfigurationSource() {
-        var allowedOrigins = List.of(
-                "http://localhost:3000",
-                "http://127.0.0.1:3000",
-                "http://localhost:5173"
-        );
+    CookieCsrfTokenRepository csrfTokenRepository(CookieProps cookieProps) {
+        CookieCsrfTokenRepository csrfTokenRepository = new CookieCsrfTokenRepository();
+        csrfTokenRepository.setCookiePath("/");
+        csrfTokenRepository.setCookieCustomizer(cookie -> cookie
+                .secure(cookieProps.isSecure())
+                .sameSite(cookieProps.getSameSite()));
+        return csrfTokenRepository;
+    }
 
+    @Bean
+    CorsConfigurationSource corsConfigurationSource(CorsProps corsProps) {
         CorsConfiguration config = new CorsConfiguration();
-        config.setAllowedOrigins(allowedOrigins);
+        config.setAllowedOrigins(corsProps.getAllowedOrigins());
         config.setAllowedMethods(List.of("GET","POST","PUT","PATCH","DELETE","OPTIONS"));
-        config.setAllowedHeaders(List.of("*"));
+        config.setAllowedHeaders(List.of("Content-Type", "X-XSRF-TOKEN"));
         config.setAllowCredentials(true);
         config.setMaxAge(3600L);
 
