@@ -1,0 +1,159 @@
+package com.example.visceralmassageapi.media;
+
+import com.example.visceralmassageapi.IntegrationTestBase;
+import com.fasterxml.jackson.databind.ObjectMapper;
+import jakarta.servlet.http.Cookie;
+import org.junit.jupiter.api.Test;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.http.MediaType;
+import org.springframework.mock.web.MockMultipartFile;
+import org.springframework.test.context.DynamicPropertyRegistry;
+import org.springframework.test.context.DynamicPropertySource;
+import org.springframework.test.web.servlet.MockMvc;
+
+import java.util.Arrays;
+
+import static org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.csrf;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.delete;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.multipart;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.content;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.header;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
+
+class AdminMediaAccessIT extends IntegrationTestBase {
+
+    private static final String ADMIN_PHONE = "+380000000099";
+    private static final String ADMIN_PASSWORD = "ConfiguredAdminPassword123!";
+    private static final byte[] PNG_BYTES = new byte[]{
+            (byte) 0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a, 0x01, 0x02
+    };
+
+    @Autowired MockMvc mvc;
+    @Autowired ObjectMapper objectMapper;
+
+    @DynamicPropertySource
+    static void mediaProperties(DynamicPropertyRegistry registry) {
+        registry.add("app.admin.bootstrap.enabled", () -> "true");
+        registry.add("app.admin.bootstrap.phone", () -> ADMIN_PHONE);
+        registry.add("app.admin.bootstrap.email", () -> "ADMIN@EXAMPLE.COM");
+        registry.add("app.admin.bootstrap.password", () -> ADMIN_PASSWORD);
+        registry.add("app.media.storage-directory", () -> "./build/test-media/admin-media-access");
+        registry.add("app.media.max-file-size-bytes", () -> "16");
+    }
+
+    @Test
+    void anonymousAndRegularUsersCannotUploadMedia() throws Exception {
+        mvc.perform(multipart("/api/admin/media").file(validPng()).with(csrf()))
+                .andExpect(status().isForbidden());
+
+        Cookie[] userCookies = registerUserCookies("+380000000095");
+
+        mvc.perform(multipart("/api/admin/media").file(validPng()).with(csrf()).cookie(userCookies))
+                .andExpect(status().isForbidden());
+    }
+
+    @Test
+    void adminUploadRequiresCsrfProtection() throws Exception {
+        Cookie[] adminCookies = loginAdminCookies();
+
+        mvc.perform(multipart("/api/admin/media").file(validPng()).cookie(adminCookies))
+                .andExpect(status().isForbidden());
+    }
+
+    @Test
+    void adminCanUploadPreviewListAndDeletePrivateMedia() throws Exception {
+        Cookie[] adminCookies = loginAdminCookies();
+
+        var uploadResult = mvc.perform(multipart("/api/admin/media")
+                        .file(validPng())
+                        .with(csrf())
+                        .cookie(adminCookies))
+                .andExpect(status().isCreated())
+                .andExpect(jsonPath("$.originalFilename").value("cover.png"))
+                .andExpect(jsonPath("$.contentType").value("image/png"))
+                .andExpect(jsonPath("$.sizeBytes").value(PNG_BYTES.length))
+                .andReturn();
+
+        String id = objectMapper.readTree(uploadResult.getResponse().getContentAsString()).path("id").asText();
+
+        mvc.perform(get("/api/admin/media/{id}", id).cookie(adminCookies))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.id").value(id));
+
+        mvc.perform(get("/api/admin/media").cookie(adminCookies))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.content[?(@.id == '%s')]".formatted(id)).exists());
+
+        mvc.perform(get("/api/admin/media/{id}/content", id).cookie(adminCookies))
+                .andExpect(status().isOk())
+                .andExpect(header().string("Cache-Control", "no-store"))
+                .andExpect(content().contentType(MediaType.IMAGE_PNG))
+                .andExpect(content().bytes(PNG_BYTES));
+
+        mvc.perform(delete("/api/admin/media/{id}", id).with(csrf()).cookie(adminCookies))
+                .andExpect(status().isNoContent());
+
+        mvc.perform(get("/api/admin/media/{id}", id).cookie(adminCookies))
+                .andExpect(status().isNotFound());
+    }
+
+    @Test
+    void adminCannotUploadContentThatDoesNotMatchDeclaredType() throws Exception {
+        Cookie[] adminCookies = loginAdminCookies();
+        MockMultipartFile fakePng = new MockMultipartFile(
+                "file", "fake.png", MediaType.IMAGE_PNG_VALUE, "not a png".getBytes()
+        );
+
+        mvc.perform(multipart("/api/admin/media")
+                        .file(fakePng)
+                        .with(csrf())
+                        .cookie(adminCookies))
+                .andExpect(status().isBadRequest());
+    }
+
+    @Test
+    void adminCannotUploadMediaAboveConfiguredLimit() throws Exception {
+        Cookie[] adminCookies = loginAdminCookies();
+        byte[] oversizedBytes = Arrays.copyOf(PNG_BYTES, 17);
+        MockMultipartFile oversized = new MockMultipartFile(
+                "file", "large.png", MediaType.IMAGE_PNG_VALUE, oversizedBytes
+        );
+
+        mvc.perform(multipart("/api/admin/media")
+                        .file(oversized)
+                        .with(csrf())
+                        .cookie(adminCookies))
+                .andExpect(status().isPayloadTooLarge());
+    }
+
+    private MockMultipartFile validPng() {
+        return new MockMultipartFile("file", "cover.png", MediaType.IMAGE_PNG_VALUE, PNG_BYTES);
+    }
+
+    private Cookie[] registerUserCookies(String phone) throws Exception {
+        return mvc.perform(post("/api/auth/register").with(csrf())
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {"phone":"%s","email":null,"firstName":"Iryna","lastName":"Koval","password":"Passw0rd!Secure"}
+                                """.formatted(phone)))
+                .andExpect(status().isOk())
+                .andReturn()
+                .getResponse()
+                .getCookies();
+    }
+
+    private Cookie[] loginAdminCookies() throws Exception {
+        return mvc.perform(post("/api/auth/login").with(csrf())
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {"identifier":"%s","password":"%s"}
+                                """.formatted(ADMIN_PHONE, ADMIN_PASSWORD)))
+                .andExpect(status().isOk())
+                .andReturn()
+                .getResponse()
+                .getCookies();
+    }
+}

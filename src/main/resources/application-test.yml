@@ -4,6 +4,10 @@ spring:
   docker:
     compose:
       enabled: false
+  servlet:
+    multipart:
+      max-file-size: 25MB
+      max-request-size: 26MB
 
 jwt:
   secret: "test-secret-test-secret-test-secret-test-secret-123456"
@@ -21,3 +25,12 @@ app:
   notifications:
     email:
       transport: disabled
+  media:
+    storage-directory: ./build/test-media
+    max-file-size-bytes: 26214400
+    allowed-content-types:
+      - image/jpeg
+      - image/png
+      - image/webp
+      - video/mp4
+      - video/webm

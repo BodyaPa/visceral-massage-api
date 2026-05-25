@@ -2,6 +2,10 @@ server:
   port: 8080
 
 spring:
+  servlet:
+    multipart:
+      max-file-size: ${MEDIA_MULTIPART_MAX_FILE_SIZE:25MB}
+      max-request-size: ${MEDIA_MULTIPART_MAX_REQUEST_SIZE:26MB}
   datasource:
     url: jdbc:postgresql://localhost:5432/visceral
     username: visceral
@@ -46,3 +50,12 @@ app:
       phone: ${ADMIN_BOOTSTRAP_PHONE:}
       email: ${ADMIN_BOOTSTRAP_EMAIL:}
       password: ${ADMIN_BOOTSTRAP_PASSWORD:}
+  media:
+    storage-directory: ${MEDIA_STORAGE_DIRECTORY:./var/media}
+    max-file-size-bytes: ${MEDIA_MAX_FILE_SIZE_BYTES:26214400}
+    allowed-content-types:
+      - image/jpeg
+      - image/png
+      - image/webp
+      - video/mp4
+      - video/webm

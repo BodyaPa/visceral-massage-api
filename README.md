@@ -109,3 +109,27 @@ public staging route.
 Do not commit JWT secrets, admin bootstrap credentials, SMTP credentials or
 environment files. Production settings must be supplied through environment
 variables or deployment secrets.
+
+## Private Media Storage Foundation
+
+The initial news-media storage foundation is backend-only. Uploaded assets are
+stored privately and are not exposed to public news readers until a later
+published-content integration defines that lifecycle.
+
+Administrators can use CSRF-protected endpoints:
+
+- `POST /api/admin/media` with multipart part `file` to upload an asset;
+- `GET /api/admin/media` and `GET /api/admin/media/{id}` for metadata;
+- `GET /api/admin/media/{id}/content` for an admin-only preview;
+- `DELETE /api/admin/media/{id}` to remove metadata and stored bytes.
+
+The service stores metadata in PostgreSQL and local file bytes under
+`./var/media` in development. The directory is ignored by Git. Accepted types
+are JPEG, PNG, WebP, MP4 and WebM; requests are checked against both their
+declared content type and the file signature. The default application limit is
+25 MB and can be changed through `MEDIA_MAX_FILE_SIZE_BYTES` together with
+`MEDIA_MULTIPART_MAX_FILE_SIZE`/`MEDIA_MULTIPART_MAX_REQUEST_SIZE`.
+
+For staging or production, `MEDIA_STORAGE_DIRECTORY` must point at a persistent
+mounted volume before enabling editor integration. Replacing the local storage
+adapter with object storage remains the intended production-scale option.
