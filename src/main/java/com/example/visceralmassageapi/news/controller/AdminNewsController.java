@@ -5,6 +5,8 @@ import com.example.visceralmassageapi.news.dto.NewsResponse;
 import com.example.visceralmassageapi.news.dto.NewsUpdateRequest;
 import com.example.visceralmassageapi.news.service.NewsService;
 import jakarta.validation.Valid;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
@@ -16,6 +18,16 @@ public class AdminNewsController {
 
     public AdminNewsController(NewsService service) {
         this.service = service;
+    }
+
+    @GetMapping
+    public Page<NewsResponse> list(Pageable pageable) {
+        return service.findAllForAdmin(pageable);
+    }
+
+    @GetMapping("/{id}")
+    public NewsResponse get(@PathVariable Integer id) {
+        return service.findByIdForAdmin(id);
     }
 
     @PostMapping

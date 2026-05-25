@@ -56,6 +56,12 @@ class AdminNewsAccessIT extends IntegrationTestBase {
     }
 
     @Test
+    void anonymousCannotReadFullNewsTranslationsThroughAdminEndpoint() throws Exception {
+        mvc.perform(get("/api/admin/news"))
+                .andExpect(status().isForbidden());
+    }
+
+    @Test
     void authenticatedUserCannotCreateNewsThroughPublicEndpoint() throws Exception {
         Cookie[] userCookies = registerUserCookies("+380000000096");
 
@@ -79,6 +85,11 @@ class AdminNewsAccessIT extends IntegrationTestBase {
                 .andReturn();
 
         int id = objectMapper.readTree(result.getResponse().getContentAsString()).path("id").asInt();
+
+        mvc.perform(get("/api/admin/news/{id}", id).cookie(adminCookies))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.titleUa").value("Admin news"))
+                .andExpect(jsonPath("$.titleEn").doesNotExist());
 
         mvc.perform(get("/api/news/{id}", id).param("lang", "ua"))
                 .andExpect(status().isOk())

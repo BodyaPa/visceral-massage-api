@@ -36,6 +36,17 @@ public class NewsServiceImpl implements NewsService {
     }
 
     @Override
+    public Page<NewsResponse> findAllForAdmin(Pageable pageable) {
+        return repo.findAll(pageable).map(NewsMapper::toResponse);
+    }
+
+    @Override
+    public NewsResponse findByIdForAdmin(Integer id) {
+        var entity = repo.findById(id).orElseThrow(() -> new NewsNotFoundException(id));
+        return NewsMapper.toResponse(entity);
+    }
+
+    @Override
     public NewsResponse create(NewsCreateRequest request) {
         var entity = NewsMapper.toEntity(request);
         validateTranslationState(entity);

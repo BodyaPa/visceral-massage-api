@@ -11,6 +11,8 @@ import org.springframework.data.domain.Pageable;
 public interface NewsService {
     Page<LocalizedNewsResponse> findAll(NewsLocale locale, Pageable pageable);
     LocalizedNewsResponse findById(Integer id, NewsLocale locale);
+    Page<NewsResponse> findAllForAdmin(Pageable pageable);
+    NewsResponse findByIdForAdmin(Integer id);
     NewsResponse create(NewsCreateRequest request);
     NewsResponse updatePut(Integer id, NewsUpdateRequest request);
     NewsResponse updatePatch(Integer id, NewsUpdateRequest request);
