@@ -8,6 +8,8 @@ import com.example.visceralmassageapi.media.entity.MediaAsset;
 import com.example.visceralmassageapi.media.exception.MediaAssetNotFoundException;
 import com.example.visceralmassageapi.media.repository.MediaAssetRepository;
 import com.example.visceralmassageapi.media.storage.MediaFileStorage;
+import com.example.visceralmassageapi.news.exception.NewsNotFoundException;
+import com.example.visceralmassageapi.news.repository.NewsRepository;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.http.MediaType;
@@ -21,6 +23,7 @@ import java.nio.file.InvalidPathException;
 import java.nio.file.Path;
 import java.time.OffsetDateTime;
 import java.util.Locale;
+import java.util.List;
 import java.util.Map;
 import java.util.UUID;
 
@@ -38,11 +41,14 @@ public class MediaServiceImpl implements MediaService {
     private final MediaAssetRepository repository;
     private final MediaFileStorage fileStorage;
     private final MediaProps properties;
+    private final NewsRepository newsRepository;
 
-    public MediaServiceImpl(MediaAssetRepository repository, MediaFileStorage fileStorage, MediaProps properties) {
+    public MediaServiceImpl(MediaAssetRepository repository, MediaFileStorage fileStorage, MediaProps properties,
+                            NewsRepository newsRepository) {
         this.repository = repository;
         this.fileStorage = fileStorage;
         this.properties = properties;
+        this.newsRepository = newsRepository;
     }
 
     @Override
@@ -92,9 +98,48 @@ public class MediaServiceImpl implements MediaService {
     }
 
     @Override
+    public List<MediaAssetResponse> findAllForNews(Integer newsId) {
+        requireNews(newsId);
+        return repository.findAllByNewsIdOrderByCreatedAtAsc(newsId).stream().map(this::toResponse).toList();
+    }
+
+    @Override
+    @Transactional
+    public MediaAssetResponse linkToNews(UUID id, Integer newsId) {
+        requireNews(newsId);
+        MediaAsset asset = requireAsset(id);
+        if (asset.getNewsId() != null && !asset.getNewsId().equals(newsId)) {
+            throw new BadRequestException("Media asset is already linked to another news item");
+        }
+        asset.setNewsId(newsId);
+        return toResponse(repository.save(asset));
+    }
+
+    @Override
+    @Transactional
+    public MediaAssetResponse unlinkFromNews(UUID id, Integer newsId) {
+        MediaAsset asset = requireAsset(id);
+        if (!newsId.equals(asset.getNewsId())) {
+            throw new BadRequestException("Media asset is not linked to this news item");
+        }
+        asset.setNewsId(null);
+        return toResponse(repository.save(asset));
+    }
+
+    @Override
+    public MediaContent loadPublishedContent(Integer newsId, UUID id) {
+        MediaAsset asset = repository.findByIdAndNewsId(id, newsId)
+                .orElseThrow(() -> new MediaAssetNotFoundException(id));
+        return new MediaContent(toResponse(asset), fileStorage.load(asset.getStorageKey()));
+    }
+
+    @Override
     @Transactional
     public void delete(UUID id) {
         MediaAsset asset = requireAsset(id);
+        if (asset.getNewsId() != null) {
+            throw new BadRequestException("Linked media asset must be detached before deletion");
+        }
         fileStorage.delete(asset.getStorageKey());
         repository.delete(asset);
     }
@@ -188,12 +233,19 @@ public class MediaServiceImpl implements MediaService {
         return repository.findById(id).orElseThrow(() -> new MediaAssetNotFoundException(id));
     }
 
+    private void requireNews(Integer newsId) {
+        if (!newsRepository.existsById(newsId)) {
+            throw new NewsNotFoundException(newsId);
+        }
+    }
+
     private MediaAssetResponse toResponse(MediaAsset asset) {
         return new MediaAssetResponse(
                 asset.getId(),
                 asset.getOriginalFilename(),
                 asset.getContentType(),
                 asset.getSizeBytes(),
+                asset.getNewsId(),
                 asset.getCreatedAt()
         );
     }

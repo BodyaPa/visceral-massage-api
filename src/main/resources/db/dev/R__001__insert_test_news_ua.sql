@@ -1,7 +1,7 @@
 -- R__001__insert_test_news_ua.sql
 
-INSERT INTO news (title_ua, content_ua)
-SELECT seed.title_ua, seed.content_ua
+INSERT INTO news (title_ua, content_ua, status, published_at)
+SELECT seed.title_ua, seed.content_ua, 'PUBLISHED', NOW()
 FROM (VALUES
                                           ('Що таке вісцеральна терапія?', '**Вісцеральна терапія** — це м''яка мануальна методика, що спрямована на нормалізацію положення, тонусу та рухливості внутрішніх органів шляхом впливу на зв''язковий апарат і фасції.
 

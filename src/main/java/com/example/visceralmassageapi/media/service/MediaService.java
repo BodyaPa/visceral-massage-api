@@ -6,6 +6,7 @@ import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.web.multipart.MultipartFile;
 
+import java.util.List;
 import java.util.UUID;
 
 public interface MediaService {
@@ -17,6 +18,14 @@ public interface MediaService {
     MediaAssetResponse upload(MultipartFile file, long uploadedBy);
 
     MediaContent loadContent(UUID id);
+
+    List<MediaAssetResponse> findAllForNews(Integer newsId);
+
+    MediaAssetResponse linkToNews(UUID id, Integer newsId);
+
+    MediaAssetResponse unlinkFromNews(UUID id, Integer newsId);
+
+    MediaContent loadPublishedContent(Integer newsId, UUID id);
 
     void delete(UUID id);
 

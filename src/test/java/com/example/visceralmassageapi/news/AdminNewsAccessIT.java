@@ -79,26 +79,44 @@ class AdminNewsAccessIT extends IntegrationTestBase {
         var result = mvc.perform(post("/api/admin/news").with(csrf())
                         .cookie(adminCookies)
                         .contentType(MediaType.APPLICATION_JSON)
-                        .content(newsBody("Admin news")))
+                        .content("{}"))
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$.titleUa").value("Admin news"))
+                .andExpect(jsonPath("$.status").value("DRAFT"))
                 .andReturn();
 
         int id = objectMapper.readTree(result.getResponse().getContentAsString()).path("id").asInt();
 
+        mvc.perform(get("/api/news/{id}", id).param("lang", "ua"))
+                .andExpect(status().isNotFound());
+
+        mvc.perform(get("/api/news").param("lang", "ua"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.content[?(@.id == %s)]".formatted(id)).doesNotExist());
+
+        mvc.perform(put("/api/admin/news/{id}", id).with(csrf())
+                        .cookie(adminCookies)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(newsBody("Admin news")))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.titleUa").value("Admin news"))
+                .andExpect(jsonPath("$.status").value("DRAFT"));
+
         mvc.perform(get("/api/admin/news/{id}", id).cookie(adminCookies))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.titleUa").value("Admin news"))
-                .andExpect(jsonPath("$.titleEn").doesNotExist());
+                .andExpect(jsonPath("$.titleEn").doesNotExist())
+                .andExpect(jsonPath("$.status").value("DRAFT"));
+
+        mvc.perform(post("/api/admin/news/{id}/publish", id).with(csrf()).cookie(adminCookies))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.status").value("PUBLISHED"));
 
         mvc.perform(get("/api/news/{id}", id).param("lang", "ua"))
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$.title").value("Admin news"))
-                .andExpect(jsonPath("$.translationAvailable").value(true));
+                .andExpect(jsonPath("$.title").value("Admin news"));
 
         mvc.perform(get("/api/news/{id}", id).param("lang", "en"))
-                .andExpect(status().isOk())
-                .andExpect(jsonPath("$.translationAvailable").value(false));
+                .andExpect(status().isNotFound());
 
         mvc.perform(patch("/api/admin/news/{id}", id).with(csrf())
                         .cookie(adminCookies)
@@ -111,10 +129,36 @@ class AdminNewsAccessIT extends IntegrationTestBase {
 
         mvc.perform(get("/api/news/{id}", id).param("lang", "en"))
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$.title").value("Updated by admin"))
-                .andExpect(jsonPath("$.translationAvailable").value(true));
+                .andExpect(jsonPath("$.title").value("Updated by admin"));
+
+        mvc.perform(post("/api/admin/news/{id}/unpublish", id).with(csrf()).cookie(adminCookies))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.status").value("DRAFT"));
+
+        mvc.perform(get("/api/news/{id}", id).param("lang", "ua"))
+                .andExpect(status().isNotFound());
+
+        mvc.perform(post("/api/admin/news/{id}/archive", id).with(csrf()).cookie(adminCookies))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.status").value("ARCHIVED"));
+
+        mvc.perform(post("/api/admin/news/{id}/restore", id).with(csrf()).cookie(adminCookies))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.status").value("DRAFT"));
 
         mvc.perform(delete("/api/admin/news/{id}", id).with(csrf()).cookie(adminCookies))
+                .andExpect(status().isBadRequest());
+
+        var draftResult = mvc.perform(post("/api/admin/news").with(csrf())
+                        .cookie(adminCookies)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{}"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.status").value("DRAFT"))
+                .andReturn();
+        int draftId = objectMapper.readTree(draftResult.getResponse().getContentAsString()).path("id").asInt();
+
+        mvc.perform(delete("/api/admin/news/{id}", draftId).with(csrf()).cookie(adminCookies))
                 .andExpect(status().isNoContent());
     }
 
@@ -130,16 +174,47 @@ class AdminNewsAccessIT extends IntegrationTestBase {
     }
 
     @Test
-    void adminCannotCreateNewsWithIncompleteTranslation() throws Exception {
+    void draftCanRemainIncompleteButCannotBePublishedUntilTranslationIsComplete() throws Exception {
         Cookie[] adminCookies = loginAdminCookies();
 
-        mvc.perform(post("/api/admin/news").with(csrf())
+        var result = mvc.perform(post("/api/admin/news").with(csrf())
                         .cookie(adminCookies)
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("""
                                 {"titleUa":"Only a title"}
                                 """))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.status").value("DRAFT"))
+                .andReturn();
+
+        int id = objectMapper.readTree(result.getResponse().getContentAsString()).path("id").asInt();
+
+        mvc.perform(post("/api/admin/news/{id}/publish", id).with(csrf()).cookie(adminCookies))
                 .andExpect(status().isBadRequest());
+    }
+
+    @Test
+    void publicListReturnsOnlyPublishedItemsWithRequestedTranslation() throws Exception {
+        Cookie[] adminCookies = loginAdminCookies();
+
+        var result = mvc.perform(post("/api/admin/news").with(csrf())
+                        .cookie(adminCookies)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(newsBody("Ukrainian only")))
+                .andExpect(status().isOk())
+                .andReturn();
+        int id = objectMapper.readTree(result.getResponse().getContentAsString()).path("id").asInt();
+
+        mvc.perform(post("/api/admin/news/{id}/publish", id).with(csrf()).cookie(adminCookies))
+                .andExpect(status().isOk());
+
+        mvc.perform(get("/api/news").param("lang", "ua"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.content[?(@.id == %s)]".formatted(id)).exists());
+
+        mvc.perform(get("/api/news").param("lang", "en"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.content[?(@.id == %s)]".formatted(id)).doesNotExist());
     }
 
     @Test

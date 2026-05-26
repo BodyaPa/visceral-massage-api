@@ -30,6 +30,9 @@ public class MediaAsset {
     @Column(name = "uploaded_by", nullable = false)
     private Long uploadedBy;
 
+    @Column(name = "news_id")
+    private Integer newsId;
+
     @Column(name = "created_at", nullable = false)
     private OffsetDateTime createdAt;
 
@@ -79,6 +82,14 @@ public class MediaAsset {
 
     public void setUploadedBy(Long uploadedBy) {
         this.uploadedBy = uploadedBy;
+    }
+
+    public Integer getNewsId() {
+        return newsId;
+    }
+
+    public void setNewsId(Integer newsId) {
+        this.newsId = newsId;
     }
 
     public OffsetDateTime getCreatedAt() {

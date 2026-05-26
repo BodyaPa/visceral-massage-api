@@ -1,0 +1,17 @@
+ALTER TABLE news
+    ADD COLUMN status VARCHAR(32) NOT NULL DEFAULT 'DRAFT',
+    ADD COLUMN cover_media_id UUID REFERENCES media_assets (id) ON DELETE SET NULL,
+    ADD COLUMN created_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT NOW(),
+    ADD COLUMN updated_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT NOW(),
+    ADD COLUMN published_at TIMESTAMP WITH TIME ZONE;
+
+UPDATE news
+SET status = 'PUBLISHED',
+    published_at = NOW()
+WHERE (NULLIF(TRIM(title_ua), '') IS NOT NULL AND NULLIF(TRIM(content_ua), '') IS NOT NULL)
+   OR (NULLIF(TRIM(title_en), '') IS NOT NULL AND NULLIF(TRIM(content_en), '') IS NOT NULL);
+
+ALTER TABLE news
+    ADD CONSTRAINT ck_news_status CHECK (status IN ('DRAFT', 'PUBLISHED', 'ARCHIVED'));
+
+CREATE INDEX ix_news_status ON news (status);

@@ -110,11 +110,29 @@ Do not commit JWT secrets, admin bootstrap credentials, SMTP credentials or
 environment files. Production settings must be supplied through environment
 variables or deployment secrets.
 
-## Private Media Storage Foundation
+## News Authoring Lifecycle
 
-The initial news-media storage foundation is backend-only. Uploaded assets are
-stored privately and are not exposed to public news readers until a later
-published-content integration defines that lifecycle.
+News items use `DRAFT`, `PUBLISHED` and `ARCHIVED` status values. `POST
+/api/admin/news` creates a `DRAFT` immediately, including when the request
+body is empty, so media can be attached before text is written.
+
+CSRF-protected ADMIN actions:
+
+- `POST /api/admin/news/{id}/publish`;
+- `POST /api/admin/news/{id}/unpublish`;
+- `POST /api/admin/news/{id}/archive`;
+- `POST /api/admin/news/{id}/restore`.
+- `DELETE /api/admin/news/{id}` removes only a never-published `DRAFT`; it is
+  not a deletion path for historical published or archived news.
+
+Only `PUBLISHED` news is returned from public endpoints, and only when the
+requested `lang=ua|en` translation has both title and content. Public reads do
+not fall back to the other translation.
+
+## Private Media Storage And Covers
+
+Uploaded assets are stored privately and public access is granted only after
+an administrator links an asset to a published news item.
 
 Administrators can use CSRF-protected endpoints:
 
@@ -122,6 +140,23 @@ Administrators can use CSRF-protected endpoints:
 - `GET /api/admin/media` and `GET /api/admin/media/{id}` for metadata;
 - `GET /api/admin/media/{id}/content` for an admin-only preview;
 - `DELETE /api/admin/media/{id}` to remove metadata and stored bytes.
+
+An uploaded asset remains private until it is linked to one news item:
+
+- `PUT /api/admin/news/{newsId}/media/{mediaId}` links a private asset;
+- `GET /api/admin/news/{newsId}/media` lists linked assets for editing;
+- `DELETE /api/admin/news/{newsId}/media/{mediaId}` detaches an asset.
+- `PUT /api/admin/news/{newsId}/cover/{mediaId}` selects a linked image as cover;
+- `PUT /api/admin/news/{newsId}/cover/display-mode/{FILL|FIT}` selects either
+  a cropped cover/hero treatment or an uncropped screenshot/vertical treatment;
+- `DELETE /api/admin/news/{newsId}/cover` clears its cover.
+
+Once linked, its public content is available only through
+`GET /api/news/{newsId}/media/{mediaId}/content` while that news item is
+`PUBLISHED`. A linked asset cannot be
+deleted directly; it must be detached first. Deleting its news item detaches
+the asset through the database relationship, leaving the stored asset private
+for explicit cleanup or reuse.
 
 The service stores metadata in PostgreSQL and local file bytes under
 `./var/media` in development. The directory is ignored by Git. Accepted types
