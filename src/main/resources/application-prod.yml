@@ -41,12 +41,12 @@ app:
   notifications:
     email:
       transport: disabled
-  admin:
+  owner:
     bootstrap:
-      enabled: ${ADMIN_BOOTSTRAP_ENABLED:false}
-      phone: ${ADMIN_BOOTSTRAP_PHONE:}
-      email: ${ADMIN_BOOTSTRAP_EMAIL:}
-      password: ${ADMIN_BOOTSTRAP_PASSWORD:}
+      enabled: ${OWNER_BOOTSTRAP_ENABLED:false}
+      phone: ${OWNER_BOOTSTRAP_PHONE:}
+      email: ${OWNER_BOOTSTRAP_EMAIL:}
+      password: ${OWNER_BOOTSTRAP_PASSWORD:}
   media:
     storage-directory: ${MEDIA_STORAGE_DIRECTORY:/var/lib/ataraksia/media}
     max-file-size-bytes: ${MEDIA_MAX_FILE_SIZE_BYTES:26214400}

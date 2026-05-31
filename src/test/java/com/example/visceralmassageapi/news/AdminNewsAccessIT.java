@@ -1,11 +1,15 @@
 package com.example.visceralmassageapi.news;
 
 import com.example.visceralmassageapi.IntegrationTestBase;
+import com.example.visceralmassageapi.auth.domain.User;
+import com.example.visceralmassageapi.auth.domain.UserRole;
+import com.example.visceralmassageapi.auth.repo.UserRepository;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import jakarta.servlet.http.Cookie;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.MediaType;
+import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.test.context.DynamicPropertyRegistry;
 import org.springframework.test.context.DynamicPropertySource;
 import org.springframework.test.web.servlet.MockMvc;
@@ -16,18 +20,20 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 
 class AdminNewsAccessIT extends IntegrationTestBase {
 
-    private static final String ADMIN_PHONE = "+380000000099";
-    private static final String ADMIN_PASSWORD = "ConfiguredAdminPassword123!";
+    private static final String OWNER_PHONE = "+380000000099";
+    private static final String OWNER_PASSWORD = "ConfiguredOwnerPassword123!";
 
     @Autowired MockMvc mvc;
     @Autowired ObjectMapper objectMapper;
+    @Autowired UserRepository userRepository;
+    @Autowired PasswordEncoder passwordEncoder;
 
     @DynamicPropertySource
-    static void adminBootstrapProperties(DynamicPropertyRegistry registry) {
-        registry.add("app.admin.bootstrap.enabled", () -> "true");
-        registry.add("app.admin.bootstrap.phone", () -> ADMIN_PHONE);
-        registry.add("app.admin.bootstrap.email", () -> "ADMIN@EXAMPLE.COM");
-        registry.add("app.admin.bootstrap.password", () -> ADMIN_PASSWORD);
+    static void ownerBootstrapProperties(DynamicPropertyRegistry registry) {
+        registry.add("app.owner.bootstrap.enabled", () -> "true");
+        registry.add("app.owner.bootstrap.phone", () -> OWNER_PHONE);
+        registry.add("app.owner.bootstrap.email", () -> "OWNER@EXAMPLE.COM");
+        registry.add("app.owner.bootstrap.password", () -> OWNER_PASSWORD);
     }
 
     @Test
@@ -52,6 +58,27 @@ class AdminNewsAccessIT extends IntegrationTestBase {
                         .cookie(userCookies)
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(newsBody("Blocked user")))
+                .andExpect(status().isForbidden());
+    }
+
+    @Test
+    void smmCanCreateNewsButMasterWithoutSmmCannot() throws Exception {
+        createUserWithRoles("+380000000092", UserRole.SMM);
+        Cookie[] smmCookies = loginCookies("+380000000092");
+
+        mvc.perform(post("/api/admin/news").with(csrf())
+                        .cookie(smmCookies)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(newsBody("SMM news")))
+                .andExpect(status().isOk());
+
+        createUserWithRoles("+380000000091", UserRole.MASTER);
+        Cookie[] masterCookies = loginCookies("+380000000091");
+
+        mvc.perform(post("/api/admin/news").with(csrf())
+                        .cookie(masterCookies)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(newsBody("Blocked master")))
                 .andExpect(status().isForbidden());
     }
 
@@ -218,6 +245,41 @@ class AdminNewsAccessIT extends IntegrationTestBase {
     }
 
     @Test
+    void newsListsAreOrderedByCreationDateAfterOlderItemIsUpdated() throws Exception {
+        Cookie[] adminCookies = loginAdminCookies();
+
+        int olderId = createPublishedNews(adminCookies, "Older news");
+        int newerId = createPublishedNews(adminCookies, "Newer news");
+
+        mvc.perform(patch("/api/admin/news/{id}", olderId).with(csrf())
+                        .cookie(adminCookies)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {"contentUa":"Edited older content"}
+                                """))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.updatedAt").exists());
+
+        mvc.perform(get("/api/news")
+                        .param("lang", "ua")
+                        .param("page", "0")
+                        .param("size", "2")
+                        .param("sort", "updatedAt,desc"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.content[0].id").value(newerId))
+                .andExpect(jsonPath("$.content[1].id").value(olderId));
+
+        mvc.perform(get("/api/admin/news")
+                        .cookie(adminCookies)
+                        .param("page", "0")
+                        .param("size", "2")
+                        .param("sort", "updatedAt,desc"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.content[0].id").value(newerId))
+                .andExpect(jsonPath("$.content[1].id").value(olderId));
+    }
+
+    @Test
     void publicNewsRejectsUnsupportedLocale() throws Exception {
         mvc.perform(get("/api/news").param("lang", "pl"))
                 .andExpect(status().isBadRequest());
@@ -236,15 +298,48 @@ class AdminNewsAccessIT extends IntegrationTestBase {
     }
 
     private Cookie[] loginAdminCookies() throws Exception {
+        return loginCookies(OWNER_PHONE);
+    }
+
+    private Cookie[] loginCookies(String phone) throws Exception {
         return mvc.perform(post("/api/auth/login").with(csrf())
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("""
                                 {"identifier":"%s","password":"%s"}
-                                """.formatted(ADMIN_PHONE, ADMIN_PASSWORD)))
+                                """.formatted(phone, OWNER_PASSWORD)))
                 .andExpect(status().isOk())
                 .andReturn()
                 .getResponse()
                 .getCookies();
+    }
+
+    private void createUserWithRoles(String phone, UserRole... roles) {
+        User user = new User();
+        user.setPhone(phone);
+        user.setFirstName("Role");
+        user.setLastName("User");
+        user.setPasswordHash(passwordEncoder.encode(OWNER_PASSWORD));
+        user.getRoles().add(UserRole.USER);
+        for (UserRole role : roles) {
+            user.getRoles().add(role);
+        }
+        user.setEnabled(true);
+        userRepository.save(user);
+    }
+
+    private int createPublishedNews(Cookie[] adminCookies, String title) throws Exception {
+        var result = mvc.perform(post("/api/admin/news").with(csrf())
+                        .cookie(adminCookies)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(newsBody(title)))
+                .andExpect(status().isOk())
+                .andReturn();
+        int id = objectMapper.readTree(result.getResponse().getContentAsString()).path("id").asInt();
+
+        mvc.perform(post("/api/admin/news/{id}/publish", id).with(csrf()).cookie(adminCookies))
+                .andExpect(status().isOk());
+
+        return id;
     }
 
     private String newsBody(String title) {

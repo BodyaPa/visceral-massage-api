@@ -106,7 +106,7 @@ public staging route.
 
 ## Sensitive Configuration
 
-Do not commit JWT secrets, admin bootstrap credentials, SMTP credentials or
+Do not commit JWT secrets, owner bootstrap credentials, SMTP credentials or
 environment files. Production settings must be supplied through environment
 variables or deployment secrets.
 
@@ -116,7 +116,7 @@ News items use `DRAFT`, `PUBLISHED` and `ARCHIVED` status values. `POST
 /api/admin/news` creates a `DRAFT` immediately, including when the request
 body is empty, so media can be attached before text is written.
 
-CSRF-protected ADMIN actions:
+CSRF-protected content-management actions:
 
 - `POST /api/admin/news/{id}/publish`;
 - `POST /api/admin/news/{id}/unpublish`;
@@ -132,13 +132,13 @@ not fall back to the other translation.
 ## Private Media Storage And Covers
 
 Uploaded assets are stored privately and public access is granted only after
-an administrator links an asset to a published news item.
+an SMM/editor account links an asset to a published news item.
 
-Administrators can use CSRF-protected endpoints:
+SMM/editor accounts can use CSRF-protected endpoints:
 
 - `POST /api/admin/media` with multipart part `file` to upload an asset;
 - `GET /api/admin/media` and `GET /api/admin/media/{id}` for metadata;
-- `GET /api/admin/media/{id}/content` for an admin-only preview;
+- `GET /api/admin/media/{id}/content` for a protected preview;
 - `DELETE /api/admin/media/{id}` to remove metadata and stored bytes.
 
 An uploaded asset remains private until it is linked to one news item:

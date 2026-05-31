@@ -11,7 +11,9 @@ import java.time.Instant;
 import java.time.OffsetDateTime;
 import java.time.ZoneOffset;
 import java.time.temporal.ChronoUnit;
+import java.util.Collection;
 import java.util.Date;
+import java.util.List;
 import java.util.UUID;
 
 @Service
@@ -38,12 +40,12 @@ public class JwtService {
         this.refreshTtlDays = refreshTtlDays;
     }
 
-    public String generateAccessToken(long userId, String role) {
+    public String generateAccessToken(long userId, Collection<String> roles) {
         Instant now = Instant.now();
         return Jwts.builder()
                 .issuer(issuer)
                 .subject(Long.toString(userId))
-                .claim("role", role)
+                .claim("roles", roles)
                 .claim(TOKEN_TYPE_CLAIM, ACCESS_TOKEN_TYPE)
                 .issuedAt(Date.from(now))
                 .expiration(Date.from(now.plus(accessTtlMinutes, ChronoUnit.MINUTES)))
@@ -76,9 +78,14 @@ public class JwtService {
         return Long.parseLong(parse(token).getPayload().getSubject());
     }
 
-    public String getRoleOrNull(String token) {
-        Object v = parse(token).getPayload().get("role");
-        return v == null ? null : v.toString();
+    public List<String> getRoles(String token) {
+        Object value = parse(token).getPayload().get("roles");
+        if (value instanceof Collection<?> collection) {
+            return collection.stream()
+                    .map(Object::toString)
+                    .toList();
+        }
+        return List.of();
     }
 
     public boolean isAccessToken(String token) {

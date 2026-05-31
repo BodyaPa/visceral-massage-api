@@ -14,7 +14,9 @@ import com.example.visceralmassageapi.news.mapper.NewsMapper;
 import com.example.visceralmassageapi.news.repository.NewsRepository;
 import com.example.visceralmassageapi.media.service.MediaService;
 import org.springframework.data.domain.Page;
+import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
+import org.springframework.data.domain.Sort;
 import org.springframework.stereotype.Service;
 import org.springframework.util.StringUtils;
 
@@ -23,6 +25,9 @@ import java.util.UUID;
 
 @Service
 public class NewsServiceImpl implements NewsService {
+
+    private static final Sort NEWS_LIST_SORT = Sort.by(Sort.Direction.DESC, "createdAt")
+            .and(Sort.by(Sort.Direction.DESC, "id"));
 
     private final NewsRepository repo;
     private final MediaService mediaService;
@@ -34,7 +39,7 @@ public class NewsServiceImpl implements NewsService {
 
     @Override
     public Page<LocalizedNewsResponse> findAll(NewsLocale locale, Pageable pageable) {
-        return repo.findPublishedForLocale(NewsStatus.PUBLISHED, locale.name().toLowerCase(), pageable)
+        return repo.findPublishedForLocale(NewsStatus.PUBLISHED, locale.name().toLowerCase(), newsListPageable(pageable))
                 .map(item -> NewsMapper.toLocalizedResponse(item, locale));
     }
 
@@ -47,7 +52,7 @@ public class NewsServiceImpl implements NewsService {
 
     @Override
     public Page<NewsResponse> findAllForAdmin(Pageable pageable) {
-        return repo.findAll(pageable).map(NewsMapper::toResponse);
+        return repo.findAll(newsListPageable(pageable)).map(NewsMapper::toResponse);
     }
 
     @Override
@@ -198,6 +203,10 @@ public class NewsServiceImpl implements NewsService {
 
     private NewsItem requireNews(Integer id) {
         return repo.findById(id).orElseThrow(() -> new NewsNotFoundException(id));
+    }
+
+    private Pageable newsListPageable(Pageable pageable) {
+        return PageRequest.of(pageable.getPageNumber(), pageable.getPageSize(), NEWS_LIST_SORT);
     }
 
     private void requireEditable(NewsItem item) {

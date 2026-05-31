@@ -2,5 +2,8 @@ package com.example.visceralmassageapi.auth.domain;
 
 public enum UserRole {
     USER,
-    ADMIN
+    MASTER,
+    SPECIALIST,
+    FINANCE_MANAGER,
+    SMM
 }

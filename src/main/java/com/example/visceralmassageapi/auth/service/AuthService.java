@@ -24,8 +24,11 @@ import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
 import java.time.OffsetDateTime;
+import java.util.Comparator;
 import java.util.HexFormat;
 import java.util.Locale;
+import java.util.Set;
+import java.util.stream.Collectors;
 
 @Service
 @RequiredArgsConstructor
@@ -62,7 +65,7 @@ public class AuthService {
         u.setFirstName(firstName);
         u.setLastName(lastName);
         u.setPasswordHash(passwordEncoder.encode(req.getPassword()));
-        u.setRole(UserRole.USER);
+        u.getRoles().add(UserRole.USER);
         u.setEnabled(true);
 
         u = userRepository.save(u);
@@ -146,7 +149,8 @@ public class AuthService {
     }
 
     private AuthResult issueTokens(User u) {
-        String access = jwtService.generateAccessToken(u.getId(), u.getRole().name());
+        Set<UserRole> roles = effectiveRoles(u);
+        String access = jwtService.generateAccessToken(u.getId(), roleNames(roles));
         String refresh = jwtService.generateRefreshToken(u.getId());
 
         RefreshToken storedToken = new RefreshToken();
@@ -251,7 +255,7 @@ public class AuthService {
     public record AuthResult(User user, ResponseCookie accessCookie, ResponseCookie refreshCookie) {
         public UserDto userDto() {
             return new UserDto(user.getId(), user.getPhone(), user.getEmail(),
-                    user.getFirstName(), user.getLastName(), user.getRole());
+                    user.getFirstName(), user.getLastName(), effectiveRoles(user));
         }
     }
 
@@ -259,6 +263,20 @@ public class AuthService {
         User u = userRepository.findById(userId)
                 .orElseThrow(() -> new NotFoundException("User not found"));
         return new UserDto(u.getId(), u.getPhone(), u.getEmail(),
-                u.getFirstName(), u.getLastName(), u.getRole());
+                u.getFirstName(), u.getLastName(), effectiveRoles(u));
+    }
+
+    private static Set<UserRole> effectiveRoles(User user) {
+        if (user.getRoles() != null && !user.getRoles().isEmpty()) {
+            return user.getRoles();
+        }
+        return Set.of(UserRole.USER);
+    }
+
+    private static Set<String> roleNames(Set<UserRole> roles) {
+        return roles.stream()
+                .sorted(Comparator.comparing(Enum::name))
+                .map(Enum::name)
+                .collect(Collectors.toCollection(java.util.LinkedHashSet::new));
     }
 }

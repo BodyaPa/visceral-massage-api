@@ -5,6 +5,8 @@ import lombok.Getter;
 import lombok.Setter;
 
 import java.time.OffsetDateTime;
+import java.util.HashSet;
+import java.util.Set;
 
 @Getter
 @Setter
@@ -31,9 +33,11 @@ public class User {
     @Column(name = "password_hash", nullable = false, length = 255)
     private String passwordHash;
 
+    @ElementCollection(fetch = FetchType.EAGER)
+    @CollectionTable(name = "user_roles", joinColumns = @JoinColumn(name = "user_id"))
     @Enumerated(EnumType.STRING)
-    @Column(nullable = false, length = 32)
-    private UserRole role;
+    @Column(name = "role_name", nullable = false, length = 32)
+    private Set<UserRole> roles = new HashSet<>();
 
     @Column(nullable = false)
     private boolean enabled = true;
@@ -49,6 +53,9 @@ public class User {
         var now = OffsetDateTime.now();
         createdAt = now;
         updatedAt = now;
+        if (roles.isEmpty()) {
+            roles.add(UserRole.USER);
+        }
     }
 
     @PreUpdate

@@ -50,8 +50,10 @@ public class WebSecurityConfig {
                         .requestMatchers(HttpMethod.GET, "/api/pages/**").permitAll()
                         .requestMatchers(HttpMethod.GET, "/api/services/**").permitAll()
 
-                        // admin-only
-                        .requestMatchers("/api/admin/**").hasRole("ADMIN")
+                        // management APIs
+                        .requestMatchers("/api/admin/news", "/api/admin/news/**").hasRole("SMM")
+                        .requestMatchers("/api/admin/media", "/api/admin/media/**").hasRole("SMM")
+                        .requestMatchers("/api/admin/**").hasRole("MASTER")
 
                         // everything else in /api requires login (calendar, booking, etc.)
                         .requestMatchers("/api/**").authenticated()

@@ -25,8 +25,8 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 
 class AdminMediaAccessIT extends IntegrationTestBase {
 
-    private static final String ADMIN_PHONE = "+380000000099";
-    private static final String ADMIN_PASSWORD = "ConfiguredAdminPassword123!";
+    private static final String OWNER_PHONE = "+380000000099";
+    private static final String OWNER_PASSWORD = "ConfiguredOwnerPassword123!";
     private static final byte[] PNG_BYTES = new byte[]{
             (byte) 0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a, 0x01, 0x02
     };
@@ -36,10 +36,10 @@ class AdminMediaAccessIT extends IntegrationTestBase {
 
     @DynamicPropertySource
     static void mediaProperties(DynamicPropertyRegistry registry) {
-        registry.add("app.admin.bootstrap.enabled", () -> "true");
-        registry.add("app.admin.bootstrap.phone", () -> ADMIN_PHONE);
-        registry.add("app.admin.bootstrap.email", () -> "ADMIN@EXAMPLE.COM");
-        registry.add("app.admin.bootstrap.password", () -> ADMIN_PASSWORD);
+        registry.add("app.owner.bootstrap.enabled", () -> "true");
+        registry.add("app.owner.bootstrap.phone", () -> OWNER_PHONE);
+        registry.add("app.owner.bootstrap.email", () -> "OWNER@EXAMPLE.COM");
+        registry.add("app.owner.bootstrap.password", () -> OWNER_PASSWORD);
         registry.add("app.media.storage-directory", () -> "./build/test-media/admin-media-access");
         registry.add("app.media.max-file-size-bytes", () -> "16");
     }
@@ -150,7 +150,7 @@ class AdminMediaAccessIT extends IntegrationTestBase {
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("""
                                 {"identifier":"%s","password":"%s"}
-                                """.formatted(ADMIN_PHONE, ADMIN_PASSWORD)))
+                                """.formatted(OWNER_PHONE, OWNER_PASSWORD)))
                 .andExpect(status().isOk())
                 .andReturn()
                 .getResponse()

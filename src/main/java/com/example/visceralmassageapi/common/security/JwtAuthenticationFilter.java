@@ -12,7 +12,6 @@ import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.web.filter.OncePerRequestFilter;
 
 import java.io.IOException;
-import java.util.List;
 
 import static com.example.visceralmassageapi.auth.service.AuthService.ACCESS_COOKIE;
 
@@ -37,11 +36,9 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
             try {
                 if (jwtService.isAccessToken(token)) {
                     long userId = jwtService.getUserId(token);
-                    String role = jwtService.getRoleOrNull(token);
-
-                    var authorities = role == null
-                            ? List.<SimpleGrantedAuthority>of()
-                            : List.of(new SimpleGrantedAuthority("ROLE_" + role));
+                    var authorities = jwtService.getRoles(token).stream()
+                            .map(role -> new SimpleGrantedAuthority("ROLE_" + role))
+                            .toList();
 
                     var auth = new UsernamePasswordAuthenticationToken(userId, null, authorities);
                     SecurityContextHolder.getContext().setAuthentication(auth);

@@ -4,7 +4,7 @@ import com.example.visceralmassageapi.auth.domain.User;
 import com.example.visceralmassageapi.auth.domain.UserRole;
 import com.example.visceralmassageapi.auth.repo.UserRepository;
 import com.example.visceralmassageapi.common.audit.AuditLogger;
-import com.example.visceralmassageapi.common.config.AdminBootstrapProps;
+import com.example.visceralmassageapi.common.config.OwnerBootstrapProps;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.boot.ApplicationArguments;
@@ -19,13 +19,13 @@ import java.util.Locale;
 @Slf4j
 @Component
 @RequiredArgsConstructor
-@ConditionalOnProperty(prefix = "app.admin.bootstrap", name = "enabled", havingValue = "true")
-public class AdminBootstrapRunner implements ApplicationRunner {
+@ConditionalOnProperty(prefix = "app.owner.bootstrap", name = "enabled", havingValue = "true")
+public class OwnerBootstrapRunner implements ApplicationRunner {
 
     private static final String PHONE_PATTERN = "^\\+[1-9]\\d{9,14}$";
     private static final int MIN_PASSWORD_LENGTH = 12;
 
-    private final AdminBootstrapProps properties;
+    private final OwnerBootstrapProps properties;
     private final UserRepository userRepository;
     private final PasswordEncoder passwordEncoder;
     private final AuditLogger auditLogger;
@@ -33,39 +33,43 @@ public class AdminBootstrapRunner implements ApplicationRunner {
     @Override
     @Transactional
     public void run(ApplicationArguments args) {
-        if (userRepository.existsByRole(UserRole.ADMIN)) {
-            log.info("Admin bootstrap skipped because an admin user already exists.");
+        if (userRepository.existsByAssignedRole(UserRole.MASTER)) {
+            log.info("Owner bootstrap skipped because an owner user already exists.");
             return;
         }
 
-        String phone = required(properties.getPhone(), "ADMIN_BOOTSTRAP_PHONE");
-        String password = required(properties.getPassword(), "ADMIN_BOOTSTRAP_PASSWORD");
+        String phone = required(properties.getPhone(), "OWNER_BOOTSTRAP_PHONE");
+        String password = required(properties.getPassword(), "OWNER_BOOTSTRAP_PASSWORD");
         String email = normalizeEmail(properties.getEmail());
 
         if (!phone.matches(PHONE_PATTERN)) {
-            throw new IllegalStateException("ADMIN_BOOTSTRAP_PHONE must be in E.164 format.");
+            throw new IllegalStateException("OWNER_BOOTSTRAP_PHONE must be in E.164 format.");
         }
         if (password.length() < MIN_PASSWORD_LENGTH) {
-            throw new IllegalStateException("ADMIN_BOOTSTRAP_PASSWORD must contain at least 12 characters.");
+            throw new IllegalStateException("OWNER_BOOTSTRAP_PASSWORD must contain at least 12 characters.");
         }
         if (userRepository.existsByPhone(phone) || email != null && userRepository.existsByEmail(email)) {
-            throw new IllegalStateException("Configured bootstrap identity is already used by a non-admin user.");
+            throw new IllegalStateException("Configured bootstrap identity is already used by another user.");
         }
 
-        User admin = new User();
-        admin.setPhone(phone);
-        admin.setEmail(email);
-        admin.setPasswordHash(passwordEncoder.encode(password));
-        admin.setRole(UserRole.ADMIN);
-        admin.setEnabled(true);
-        userRepository.save(admin);
+        User owner = new User();
+        owner.setPhone(phone);
+        owner.setEmail(email);
+        owner.setPasswordHash(passwordEncoder.encode(password));
+        owner.getRoles().add(UserRole.USER);
+        owner.getRoles().add(UserRole.MASTER);
+        owner.getRoles().add(UserRole.SPECIALIST);
+        owner.getRoles().add(UserRole.FINANCE_MANAGER);
+        owner.getRoles().add(UserRole.SMM);
+        owner.setEnabled(true);
+        userRepository.save(owner);
 
         auditLogger.adminBootstrapCreated();
     }
 
     private String required(String value, String environmentVariable) {
         if (value == null || value.isBlank()) {
-            throw new IllegalStateException(environmentVariable + " is required when admin bootstrap is enabled.");
+            throw new IllegalStateException(environmentVariable + " is required when owner bootstrap is enabled.");
         }
         return value.trim();
     }

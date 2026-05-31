@@ -30,7 +30,8 @@ class AuthFlowIT extends IntegrationTestBase {
                 .andExpect(status().isOk())
                 .andExpect(header().stringValues("Set-Cookie", notNullValue()))
                 .andExpect(header().stringValues("Set-Cookie", everyItem(containsString("HttpOnly"))))
-                .andExpect(header().stringValues("Set-Cookie", everyItem(containsString("SameSite=Lax"))));
+                .andExpect(header().stringValues("Set-Cookie", everyItem(containsString("SameSite=Lax"))))
+                .andExpect(jsonPath("$.roles[0]").value("USER"));
     }
 
     @Test
@@ -112,7 +113,8 @@ class AuthFlowIT extends IntegrationTestBase {
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.phone").value("+380000000002"))
                 .andExpect(jsonPath("$.firstName").value("Олена"))
-                .andExpect(jsonPath("$.lastName").value("Коваль"));
+                .andExpect(jsonPath("$.lastName").value("Коваль"))
+                .andExpect(jsonPath("$.roles[0]").value("USER"));
     }
 
     @Test

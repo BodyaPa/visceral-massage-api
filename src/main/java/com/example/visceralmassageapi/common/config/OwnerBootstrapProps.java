@@ -9,8 +9,8 @@ import org.springframework.validation.annotation.Validated;
 @Getter
 @Setter
 @Validated
-@ConfigurationProperties(prefix = "app.admin.bootstrap")
-public class AdminBootstrapProps {
+@ConfigurationProperties(prefix = "app.owner.bootstrap")
+public class OwnerBootstrapProps {
     private boolean enabled = false;
     private String phone;
     @Email
