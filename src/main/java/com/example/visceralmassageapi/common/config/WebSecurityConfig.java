@@ -49,10 +49,14 @@ public class WebSecurityConfig {
                         .requestMatchers(HttpMethod.GET, "/api/news/**").permitAll()
                         .requestMatchers(HttpMethod.GET, "/api/pages/**").permitAll()
                         .requestMatchers(HttpMethod.GET, "/api/services/**").permitAll()
+                        .requestMatchers(HttpMethod.GET, "/api/offices/**").permitAll()
+                        .requestMatchers(HttpMethod.GET, "/api/schedule/**").permitAll()
 
                         // management APIs
                         .requestMatchers("/api/admin/news", "/api/admin/news/**").hasRole("SMM")
                         .requestMatchers("/api/admin/media", "/api/admin/media/**").hasRole("SMM")
+                        .requestMatchers("/api/admin/schedule", "/api/admin/schedule/**").hasRole("SPECIALIST")
+                        .requestMatchers("/api/admin/finance", "/api/admin/finance/**").hasRole("FINANCE_MANAGER")
                         .requestMatchers("/api/admin/**").hasRole("MASTER")
 
                         // everything else in /api requires login (calendar, booking, etc.)

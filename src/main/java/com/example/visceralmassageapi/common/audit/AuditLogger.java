@@ -26,4 +26,20 @@ public class AuditLogger {
     public void adminAccessDenied(String method) {
         log.warn("audit event=admin_access_denied area=admin_api method={}", method);
     }
+
+    public void bookingCreated(long bookingId, long actorId) {
+        log.info("audit event=booking_created bookingId={} actorId={}", bookingId, actorId);
+    }
+
+    public void bookingConflict(long availabilityBlockId, long actorId) {
+        log.warn("audit event=booking_conflict availabilityBlockId={} actorId={}", availabilityBlockId, actorId);
+    }
+
+    public void bookingCancelled(long bookingId, long actorId) {
+        log.info("audit event=booking_cancelled bookingId={} actorId={}", bookingId, actorId);
+    }
+
+    public void bookingPaymentConfirmed(long bookingId, long actorId) {
+        log.info("audit event=booking_payment_confirmed bookingId={} actorId={}", bookingId, actorId);
+    }
 }

@@ -26,6 +26,12 @@ public class OfficeService {
     }
 
     @Transactional(readOnly = true)
+    public Page<OfficeResponse> listPublic(Pageable pageable) {
+        return officeRepository.search(null, true, pageable)
+                .map(this::toResponse);
+    }
+
+    @Transactional(readOnly = true)
     public OfficeResponse get(long id) {
         return toResponse(requireOffice(id));
     }

@@ -30,5 +30,7 @@ public abstract class IntegrationTestBase {
         r.add("spring.jpa.hibernate.ddl-auto", () -> "validate");
         r.add("spring.flyway.locations", () -> "classpath:db/migration");
         r.add("spring.docker.compose.enabled", () -> "false");
+        r.add("spring.datasource.hikari.maximum-pool-size", () -> "3");
+        r.add("spring.datasource.hikari.minimum-idle", () -> "0");
     }
 }

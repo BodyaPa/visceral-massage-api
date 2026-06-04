@@ -109,6 +109,18 @@ class AdminOfficeManagementIT extends IntegrationTestBase {
     }
 
     @Test
+    void publicOfficesReturnOnlyActiveOffices() throws Exception {
+        Cookie[] ownerCookies = loginCookies(OWNER_PHONE);
+        long activeId = createOffice(ownerCookies, "Public Office", true);
+        long inactiveId = createOffice(ownerCookies, "Hidden Office", false);
+
+        mvc.perform(get("/api/offices").param("size", "50"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.content[?(@.id == %s)]".formatted(activeId)).exists())
+                .andExpect(jsonPath("$.content[?(@.id == %s)]".formatted(inactiveId)).doesNotExist());
+    }
+
+    @Test
     void officeMutationsRequireCsrfAndValidRequiredFields() throws Exception {
         Cookie[] ownerCookies = loginCookies(OWNER_PHONE);
 
@@ -154,6 +166,31 @@ class AdminOfficeManagementIT extends IntegrationTestBase {
                 .andReturn()
                 .getResponse()
                 .getCookies();
+    }
+
+    private long createOffice(Cookie[] ownerCookies, String name, boolean active) throws Exception {
+        var result = mvc.perform(post("/api/admin/offices")
+                        .with(csrf())
+                        .cookie(ownerCookies)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {
+                                  "name":"%s",
+                                  "address":"Kyiv",
+                                  "active":%s,
+                                  "phone":null,
+                                  "email":null,
+                                  "locationDetails":null
+                                }
+                                """.formatted(name, active)))
+                .andExpect(status().isOk())
+                .andReturn();
+
+        return com.fasterxml.jackson.databind.json.JsonMapper.builder()
+                .build()
+                .readTree(result.getResponse().getContentAsString())
+                .path("id")
+                .asLong();
     }
 
     private String uniquePhone() {
