@@ -21,6 +21,37 @@ public interface BookingRepository extends JpaRepository<Booking, Long>, JpaSpec
     boolean existsByAvailabilityBlockId(long availabilityBlockId);
 
     @Query("""
+            SELECT COUNT(booking) > 0
+            FROM Booking booking
+            WHERE booking.availabilityBlock.id = :availabilityBlockId
+              AND booking.status <> com.example.visceralmassageapi.booking.domain.BookingStatus.CANCELLED
+              AND booking.startsAt < :endsAt
+              AND booking.endsAt > :startsAt
+            """)
+    boolean existsActiveOverlappingBooking(long availabilityBlockId, OffsetDateTime startsAt, OffsetDateTime endsAt);
+
+    @Query("""
+            SELECT COUNT(booking) > 0
+            FROM Booking booking
+            WHERE booking.specialist.id = :specialistId
+              AND booking.status <> com.example.visceralmassageapi.booking.domain.BookingStatus.CANCELLED
+              AND booking.startsAt < :endsAt
+              AND booking.endsAt > :startsAt
+            """)
+    boolean existsActiveOverlappingSpecialistBooking(long specialistId, OffsetDateTime startsAt, OffsetDateTime endsAt);
+
+    @Query("""
+            SELECT booking
+            FROM Booking booking
+            WHERE booking.availabilityBlock.id = :availabilityBlockId
+              AND booking.status <> com.example.visceralmassageapi.booking.domain.BookingStatus.CANCELLED
+              AND booking.startsAt < :to
+              AND booking.endsAt > :from
+            ORDER BY booking.startsAt ASC, booking.id ASC
+            """)
+    List<Booking> findActiveBookingsForAvailabilityBlock(long availabilityBlockId, OffsetDateTime from, OffsetDateTime to);
+
+    @Query("""
             SELECT booking.availabilityBlock.id
             FROM Booking booking
             WHERE booking.specialist.id = :specialistId
@@ -62,4 +93,18 @@ public interface BookingRepository extends JpaRepository<Booking, Long>, JpaSpec
             ORDER BY booking.startsAt ASC, booking.id ASC
             """)
     List<Booking> findSpecialistBookings(long specialistId, OffsetDateTime from, OffsetDateTime to);
+
+    @Query("""
+            SELECT booking
+            FROM Booking booking
+            JOIN FETCH booking.specialist
+            LEFT JOIN FETCH booking.office
+            WHERE booking.status <> com.example.visceralmassageapi.booking.domain.BookingStatus.CANCELLED
+              AND booking.startsAt < :to
+              AND booking.endsAt > :from
+              AND (:officeId IS NULL OR booking.office.id = :officeId)
+              AND (:specialistId IS NULL OR booking.specialist.id = :specialistId)
+            ORDER BY booking.startsAt ASC, booking.id ASC
+            """)
+    List<Booking> findPublicOccupiedBookings(OffsetDateTime from, OffsetDateTime to, Long officeId, Long specialistId);
 }

@@ -3,6 +3,8 @@ package com.example.visceralmassageapi.services.dto;
 import lombok.AllArgsConstructor;
 import lombok.Getter;
 
+import com.example.visceralmassageapi.services.entity.ServiceBookingMode;
+
 import java.math.BigDecimal;
 import java.time.OffsetDateTime;
 
@@ -16,6 +18,7 @@ public class AdminServiceResponse {
     private String descriptionEn;
     private Integer durationMinutes;
     private BigDecimal basePrice;
+    private ServiceBookingMode bookingMode;
     private boolean active;
     private String externalPaymentUrl;
     private OffsetDateTime createdAt;

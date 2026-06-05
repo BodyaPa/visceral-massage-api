@@ -100,7 +100,7 @@ class SpecialistScheduleManagementIT extends IntegrationTestBase {
     }
 
     @Test
-    void specialistAvailabilityRejectsOverlappingBlocks() throws Exception {
+    void specialistAvailabilityAllowsBlockedExceptionsButRejectsSameTypeOverlap() throws Exception {
         Cookie[] specialistCookies = loginCookies(OWNER_PHONE);
 
         mvc.perform(post("/api/admin/schedule/availability")
@@ -127,7 +127,114 @@ class SpecialistScheduleManagementIT extends IntegrationTestBase {
                                   "endsAt":"2030-02-02T13:00:00Z"
                                 }
                                 """))
+                .andExpect(status().isOk());
+
+        mvc.perform(post("/api/admin/schedule/availability")
+                        .with(csrf())
+                        .cookie(specialistCookies)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {
+                                  "status":"AVAILABLE",
+                                  "startsAt":"2030-02-02T10:00:00Z",
+                                  "endsAt":"2030-02-02T14:00:00Z"
+                                }
+                                """))
                 .andExpect(status().isBadRequest());
+    }
+
+    @Test
+    void specialistCanUpdateOwnAvailabilityAndOverlapValidationExcludesCurrentBlock() throws Exception {
+        Cookie[] specialistCookies = loginCookies(OWNER_PHONE);
+        long officeId = createOffice();
+        long otherOfficeId = createOffice();
+
+        var createResult = mvc.perform(post("/api/admin/schedule/availability")
+                        .with(csrf())
+                        .cookie(specialistCookies)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {
+                                  "officeId":%s,
+                                  "status":"AVAILABLE",
+                                  "startsAt":"2030-02-05T08:00:00Z",
+                                  "endsAt":"2030-02-05T12:00:00Z",
+                                  "notes":"Original"
+                                }
+                                """.formatted(officeId)))
+                .andExpect(status().isOk())
+                .andReturn();
+
+        long blockId = objectMapper.readTree(createResult.getResponse().getContentAsString()).path("id").asLong();
+
+        mvc.perform(put("/api/admin/schedule/availability/{id}", blockId)
+                        .with(csrf())
+                        .cookie(specialistCookies)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {
+                                  "officeId":%s,
+                                  "status":"AVAILABLE",
+                                  "startsAt":"2030-02-05T09:00:00Z",
+                                  "endsAt":"2030-02-05T13:00:00Z",
+                                  "notes":"  Updated block  "
+                                }
+                                """.formatted(otherOfficeId)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.id").value(blockId))
+                .andExpect(jsonPath("$.officeId").value(otherOfficeId))
+                .andExpect(jsonPath("$.startsAt").value("2030-02-05T09:00:00Z"))
+                .andExpect(jsonPath("$.endsAt").value("2030-02-05T13:00:00Z"))
+                .andExpect(jsonPath("$.notes").value("Updated block"));
+    }
+
+    @Test
+    void specialistCannotUpdateAvailabilityRangeWithBookingHistoryButCanUpdateNotes() throws Exception {
+        Cookie[] specialistCookies = loginCookies(OWNER_PHONE);
+        User specialist = userRepository.findByPhone(OWNER_PHONE).orElseThrow();
+        User client = createUserWithRoles(uniquePhone());
+        SpecialistAvailabilityBlock block = createAvailabilityEntity(specialist);
+        Booking booking = new Booking();
+        booking.setUser(client);
+        booking.setSpecialist(specialist);
+        ServiceOffering service = createService();
+        booking.setService(service);
+        booking.setAvailabilityBlock(block);
+        booking.setStatus(BookingStatus.CANCELLED);
+        booking.setStartsAt(block.getStartsAt());
+        booking.setEndsAt(block.getEndsAt());
+        booking.setBookedPrice(service.getBasePrice());
+        bookingRepository.save(booking);
+
+        mvc.perform(put("/api/admin/schedule/availability/{id}", block.getId())
+                        .with(csrf())
+                        .cookie(specialistCookies)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {
+                                  "status":"AVAILABLE",
+                                  "startsAt":"2032-01-02T08:30:00Z",
+                                  "endsAt":"2032-01-02T09:30:00Z",
+                                  "notes":"Moved"
+                                }
+                                """))
+                .andExpect(status().isBadRequest());
+
+        mvc.perform(put("/api/admin/schedule/availability/{id}", block.getId())
+                        .with(csrf())
+                        .cookie(specialistCookies)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {
+                                  "status":"AVAILABLE",
+                                  "startsAt":"2032-01-02T08:00:00Z",
+                                  "endsAt":"2032-01-02T09:00:00Z",
+                                  "notes":"  Notes only  "
+                                }
+                                """))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.booked").value(true))
+                .andExpect(jsonPath("$.notes").value("Notes only"));
     }
 
     @Test

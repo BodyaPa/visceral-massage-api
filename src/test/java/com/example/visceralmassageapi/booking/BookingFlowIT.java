@@ -4,10 +4,17 @@ import com.example.visceralmassageapi.IntegrationTestBase;
 import com.example.visceralmassageapi.auth.domain.User;
 import com.example.visceralmassageapi.auth.domain.UserRole;
 import com.example.visceralmassageapi.auth.repo.UserRepository;
+import com.example.visceralmassageapi.booking.domain.Booking;
 import com.example.visceralmassageapi.booking.domain.BookingStatus;
 import com.example.visceralmassageapi.booking.repository.BookingRepository;
 import com.example.visceralmassageapi.offices.entity.Office;
 import com.example.visceralmassageapi.offices.repository.OfficeRepository;
+import com.example.visceralmassageapi.schedule.domain.FixedEvent;
+import com.example.visceralmassageapi.schedule.domain.ScheduleBlockStatus;
+import com.example.visceralmassageapi.schedule.domain.SpecialistAvailabilityBlock;
+import com.example.visceralmassageapi.schedule.repository.FixedEventRepository;
+import com.example.visceralmassageapi.schedule.repository.SpecialistAvailabilityBlockRepository;
+import com.example.visceralmassageapi.services.entity.ServiceBookingMode;
 import com.example.visceralmassageapi.services.entity.ServiceOffering;
 import com.example.visceralmassageapi.services.repository.ServiceOfferingRepository;
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -21,6 +28,8 @@ import org.springframework.test.context.DynamicPropertySource;
 import org.springframework.test.web.servlet.MockMvc;
 
 import java.math.BigDecimal;
+import java.time.OffsetDateTime;
+import java.time.temporal.ChronoUnit;
 import java.util.List;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.Executors;
@@ -29,6 +38,7 @@ import java.util.concurrent.atomic.AtomicInteger;
 import static org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.csrf;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.put;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.*;
 
 class BookingFlowIT extends IntegrationTestBase {
@@ -36,6 +46,7 @@ class BookingFlowIT extends IntegrationTestBase {
     private static final String OWNER_PHONE = "+380000000099";
     private static final String OWNER_PASSWORD = "ConfiguredOwnerPassword123!";
     private static final AtomicInteger PHONE_SUFFIX = new AtomicInteger(5000000);
+    private static final AtomicInteger AVAILABILITY_DAY = new AtomicInteger(1);
 
     @Autowired MockMvc mvc;
     @Autowired ObjectMapper objectMapper;
@@ -43,6 +54,8 @@ class BookingFlowIT extends IntegrationTestBase {
     @Autowired OfficeRepository officeRepository;
     @Autowired ServiceOfferingRepository serviceOfferingRepository;
     @Autowired BookingRepository bookingRepository;
+    @Autowired FixedEventRepository fixedEventRepository;
+    @Autowired SpecialistAvailabilityBlockRepository availabilityBlockRepository;
     @Autowired PasswordEncoder passwordEncoder;
 
     @DynamicPropertySource
@@ -83,7 +96,8 @@ class BookingFlowIT extends IntegrationTestBase {
                         .param("to", "2031-02-01T00:00:00Z")
                         .param("officeId", String.valueOf(officeId)))
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$[?(@.id == %s)]".formatted(blockId)).doesNotExist());
+                .andExpect(jsonPath("$[0].id").value(blockId))
+                .andExpect(jsonPath("$[0].endsAt").value(org.hamcrest.Matchers.endsWith("T10:00:00Z")));
 
         mvc.perform(get("/api/bookings/my")
                         .cookie(userCookies)
@@ -104,6 +118,163 @@ class BookingFlowIT extends IntegrationTestBase {
                                 }
                                 """.formatted(blockId, serviceId)))
                 .andExpect(status().isBadRequest());
+    }
+
+    @Test
+    void serviceAvailabilitySplitsLongBlockIntoBookableSlots() throws Exception {
+        Cookie[] specialistCookies = loginCookies(OWNER_PHONE);
+        Cookie[] firstUserCookies = loginCookies(createUser());
+        Cookie[] secondUserCookies = loginCookies(createUser());
+        long officeId = createOffice();
+        long serviceId = createService(true);
+        long blockId = createAvailabilityWithRange(
+                specialistCookies,
+                officeId,
+                "2031-03-02T08:00:00Z",
+                "2031-03-02T10:00:00Z"
+        );
+
+        mvc.perform(get("/api/schedule/availability")
+                        .param("from", "2031-03-02T00:00:00Z")
+                        .param("to", "2031-03-03T00:00:00Z")
+                        .param("officeId", String.valueOf(officeId))
+                        .param("serviceId", String.valueOf(serviceId)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$[0].id").value(blockId))
+                .andExpect(jsonPath("$[0].startsAt").value("2031-03-02T08:00:00Z"))
+                .andExpect(jsonPath("$[0].endsAt").value("2031-03-02T09:00:00Z"))
+                .andExpect(jsonPath("$[1].id").value(blockId))
+                .andExpect(jsonPath("$[1].startsAt").value("2031-03-02T09:00:00Z"))
+                .andExpect(jsonPath("$[1].endsAt").value("2031-03-02T10:00:00Z"))
+                .andExpect(jsonPath("$[2]").doesNotExist());
+
+        mvc.perform(post("/api/bookings")
+                        .with(csrf())
+                        .cookie(firstUserCookies)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {
+                                  "availabilityBlockId":%s,
+                                  "serviceId":%s,
+                                  "startsAt":"2031-03-02T09:00:00Z",
+                                  "reminderOptIn":false
+                                }
+                                """.formatted(blockId, serviceId)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.startsAt").value("2031-03-02T09:00:00Z"))
+                .andExpect(jsonPath("$.endsAt").value("2031-03-02T10:00:00Z"));
+
+        mvc.perform(get("/api/schedule/availability")
+                        .param("from", "2031-03-02T00:00:00Z")
+                        .param("to", "2031-03-03T00:00:00Z")
+                        .param("officeId", String.valueOf(officeId))
+                        .param("serviceId", String.valueOf(serviceId)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$[0].startsAt").value("2031-03-02T08:00:00Z"))
+                .andExpect(jsonPath("$[0].endsAt").value("2031-03-02T09:00:00Z"))
+                .andExpect(jsonPath("$[1]").doesNotExist());
+
+        mvc.perform(post("/api/bookings")
+                        .with(csrf())
+                        .cookie(secondUserCookies)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {
+                                  "availabilityBlockId":%s,
+                                  "serviceId":%s,
+                                  "startsAt":"2031-03-02T08:00:00Z",
+                                  "reminderOptIn":false
+                                }
+                                """.formatted(blockId, serviceId)))
+                .andExpect(status().isOk());
+
+        mvc.perform(post("/api/bookings")
+                        .with(csrf())
+                        .cookie(secondUserCookies)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {
+                                  "availabilityBlockId":%s,
+                                  "serviceId":%s,
+                                  "startsAt":"2031-03-02T08:00:00Z",
+                                  "reminderOptIn":false
+                                }
+                                """.formatted(blockId, serviceId)))
+                .andExpect(status().isBadRequest());
+    }
+
+    @Test
+    void userCanBookFutureSlotInsideAlreadyStartedAvailabilityWindow() throws Exception {
+        Cookie[] specialistCookies = loginCookies(OWNER_PHONE);
+        Cookie[] userCookies = loginCookies(createUser());
+        long officeId = createOffice();
+        long serviceId = createService(true);
+        OffsetDateTime blockStartsAt = OffsetDateTime.now().minusHours(1).truncatedTo(ChronoUnit.SECONDS);
+        OffsetDateTime bookingStartsAt = OffsetDateTime.now().plusHours(1).truncatedTo(ChronoUnit.SECONDS);
+        OffsetDateTime blockEndsAt = bookingStartsAt.plusHours(2);
+        long blockId = createAvailabilityWithRange(
+                specialistCookies,
+                officeId,
+                blockStartsAt.toString(),
+                blockEndsAt.toString()
+        );
+
+        mvc.perform(post("/api/bookings")
+                        .with(csrf())
+                        .cookie(userCookies)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {
+                                  "availabilityBlockId":%s,
+                                  "serviceId":%s,
+                                  "startsAt":"%s",
+                                  "reminderOptIn":false
+                }
+                """.formatted(blockId, serviceId, bookingStartsAt)))
+        .andExpect(status().isOk())
+        .andExpect(jsonPath("$.startsAt").value(bookingStartsAt.toInstant().toString()));
+    }
+
+    @Test
+    void blockedTimeInsideAvailabilityCutsGeneratedSlots() throws Exception {
+        Cookie[] specialistCookies = loginCookies(OWNER_PHONE);
+        long officeId = createOffice();
+        long serviceId = createService(true);
+        long blockId = createAvailabilityWithRange(
+                specialistCookies,
+                officeId,
+                "2031-07-02T08:00:00Z",
+                "2031-07-02T12:00:00Z"
+        );
+
+        mvc.perform(post("/api/admin/schedule/availability")
+                        .with(csrf())
+                        .cookie(specialistCookies)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {
+                                  "officeId":%s,
+                                  "status":"BLOCKED",
+                                  "startsAt":"2031-07-02T09:00:00Z",
+                                  "endsAt":"2031-07-02T10:00:00Z"
+                                }
+                                """.formatted(officeId)))
+                .andExpect(status().isOk());
+
+        mvc.perform(get("/api/schedule/availability")
+                        .param("from", "2031-07-02T00:00:00Z")
+                        .param("to", "2031-07-03T00:00:00Z")
+                        .param("officeId", String.valueOf(officeId))
+                        .param("serviceId", String.valueOf(serviceId)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$[0].id").value(blockId))
+                .andExpect(jsonPath("$[0].startsAt").value("2031-07-02T08:00:00Z"))
+                .andExpect(jsonPath("$[0].endsAt").value("2031-07-02T09:00:00Z"))
+                .andExpect(jsonPath("$[1].startsAt").value("2031-07-02T10:00:00Z"))
+                .andExpect(jsonPath("$[1].endsAt").value("2031-07-02T11:00:00Z"))
+                .andExpect(jsonPath("$[2].startsAt").value("2031-07-02T11:00:00Z"))
+                .andExpect(jsonPath("$[2].endsAt").value("2031-07-02T12:00:00Z"))
+                .andExpect(jsonPath("$[3]").doesNotExist());
     }
 
     @Test
@@ -304,8 +475,27 @@ class BookingFlowIT extends IntegrationTestBase {
         Cookie[] otherUserCookies = loginCookies(createUser());
         long officeId = createOffice();
         long serviceId = createService(true);
-        long blockId = createAvailability(specialistCookies, officeId);
+        long blockId = createAvailabilityWithRange(
+                specialistCookies,
+                officeId,
+                "2031-06-02T08:00:00Z",
+                "2031-06-02T10:00:00Z"
+        );
         long bookingId = createBooking(userCookies, blockId, serviceId);
+
+        mvc.perform(post("/api/admin/schedule/availability")
+                        .with(csrf())
+                        .cookie(specialistCookies)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {
+                                  "officeId":%s,
+                                  "status":"BLOCKED",
+                                  "startsAt":"2031-06-02T08:30:00Z",
+                                  "endsAt":"2031-06-02T09:30:00Z"
+                                }
+                                """.formatted(officeId)))
+                .andExpect(status().isBadRequest());
 
         mvc.perform(post("/api/bookings/{id}/cancel", bookingId)
                         .with(csrf())
@@ -319,8 +509,8 @@ class BookingFlowIT extends IntegrationTestBase {
                 .andExpect(jsonPath("$.status").value("CANCELLED"));
 
         mvc.perform(get("/api/schedule/availability")
-                        .param("from", "2031-01-01T00:00:00Z")
-                        .param("to", "2031-02-01T00:00:00Z")
+                        .param("from", "2031-06-02T00:00:00Z")
+                        .param("to", "2031-06-03T00:00:00Z")
                         .param("officeId", String.valueOf(officeId)))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$[?(@.id == %s)]".formatted(blockId)).exists());
@@ -346,11 +536,275 @@ class BookingFlowIT extends IntegrationTestBase {
                 .andExpect(jsonPath("$.status").value("AWAITING_PAYMENT_CONFIRMATION"));
     }
 
+    @Test
+    void userCannotCancelBookingAfterItStarted() throws Exception {
+        String userPhone = createUser();
+        Cookie[] userCookies = loginCookies(userPhone);
+        long officeId = createOffice();
+        long serviceId = createService(true);
+        User user = userRepository.findByPhone(userPhone).orElseThrow();
+        User specialist = userRepository.findByPhone(OWNER_PHONE).orElseThrow();
+        Office office = officeRepository.findById(officeId).orElseThrow();
+        ServiceOffering service = serviceOfferingRepository.findById(serviceId).orElseThrow();
+        SpecialistAvailabilityBlock block = new SpecialistAvailabilityBlock();
+        block.setSpecialist(specialist);
+        block.setOffice(office);
+        block.setStatus(ScheduleBlockStatus.AVAILABLE);
+        block.setStartsAt(OffsetDateTime.parse("2025-05-02T08:00:00Z"));
+        block.setEndsAt(OffsetDateTime.parse("2025-05-02T10:00:00Z"));
+        block = availabilityBlockRepository.save(block);
+        Booking booking = new Booking();
+        booking.setUser(user);
+        booking.setSpecialist(specialist);
+        booking.setService(service);
+        booking.setOffice(office);
+        booking.setAvailabilityBlock(block);
+        booking.setStatus(BookingStatus.AWAITING_PAYMENT_CONFIRMATION);
+        booking.setStartsAt(OffsetDateTime.parse("2025-05-02T08:00:00Z"));
+        booking.setEndsAt(OffsetDateTime.parse("2025-05-02T09:00:00Z"));
+        booking.setBookedPrice(service.getBasePrice());
+        booking.setReminderOptIn(false);
+        booking = bookingRepository.save(booking);
+
+        mvc.perform(post("/api/bookings/{id}/cancel", booking.getId())
+                        .with(csrf())
+                        .cookie(userCookies))
+                .andExpect(status().isBadRequest());
+    }
+
+    @Test
+    void fixedEventEnrollmentKeepsEventVisibleAndEnforcesCapacity() throws Exception {
+        Cookie[] specialistCookies = loginCookies(OWNER_PHONE);
+        String firstUserPhone = createUser();
+        String secondUserPhone = createUser();
+        Cookie[] firstUserCookies = loginCookies(firstUserPhone);
+        Cookie[] secondUserCookies = loginCookies(secondUserPhone);
+        long officeId = createOffice();
+        long individualServiceId = createService(true);
+        User specialist = userRepository.findByPhone(OWNER_PHONE).orElseThrow();
+        ServiceOffering eventService = new ServiceOffering();
+        eventService.setTitleUa("Тестова групова подія " + PHONE_SUFFIX.incrementAndGet());
+        eventService.setDescriptionUa("Тест");
+        eventService.setDurationMinutes(90);
+        eventService.setBasePrice(BigDecimal.valueOf(700));
+        eventService.setBookingMode(ServiceBookingMode.FIXED_EVENT);
+        eventService.setActive(true);
+        eventService = serviceOfferingRepository.save(eventService);
+        FixedEvent event = new FixedEvent();
+        event.setService(eventService);
+        event.setSpecialist(specialist);
+        event.setOffice(officeRepository.findById(officeId).orElseThrow());
+        event.setStartsAt(java.time.OffsetDateTime.parse("2031-04-02T09:00:00Z"));
+        event.setEndsAt(java.time.OffsetDateTime.parse("2031-04-02T10:00:00Z"));
+        event.setCapacity(1);
+        event.setNote("Public test event");
+        event.setActive(true);
+        event = fixedEventRepository.save(event);
+        long availabilityId = createAvailabilityWithRange(
+                specialistCookies,
+                officeId,
+                "2031-04-02T08:00:00Z",
+                "2031-04-02T11:00:00Z"
+        );
+
+        mvc.perform(get("/api/schedule/availability")
+                        .param("from", "2031-04-02T00:00:00Z")
+                        .param("to", "2031-04-03T00:00:00Z")
+                        .param("officeId", String.valueOf(officeId))
+                        .param("serviceId", String.valueOf(individualServiceId)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$[0].id").value(availabilityId))
+                .andExpect(jsonPath("$[0].startsAt").value("2031-04-02T08:00:00Z"))
+                .andExpect(jsonPath("$[0].endsAt").value("2031-04-02T09:00:00Z"))
+                .andExpect(jsonPath("$[1].startsAt").value("2031-04-02T10:00:00Z"))
+                .andExpect(jsonPath("$[1].endsAt").value("2031-04-02T11:00:00Z"))
+                .andExpect(jsonPath("$[2]").doesNotExist());
+
+        mvc.perform(get("/api/schedule/unavailable")
+                        .param("from", "2031-04-02T00:00:00Z")
+                        .param("to", "2031-04-03T00:00:00Z")
+                        .param("officeId", String.valueOf(officeId)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$[?(@.id == 'event-%s')]".formatted(event.getId())).exists())
+                .andExpect(jsonPath("$[?(@.id == 'event-%s')].status".formatted(event.getId())).value("UNAVAILABLE"));
+
+        mvc.perform(post("/api/bookings")
+                        .with(csrf())
+                        .cookie(firstUserCookies)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {
+                                  "availabilityBlockId":%s,
+                                  "serviceId":%s,
+                                  "startsAt":"2031-04-02T09:00:00Z",
+                                  "reminderOptIn":false
+                                }
+                                """.formatted(availabilityId, individualServiceId)))
+                .andExpect(status().isBadRequest());
+
+        mvc.perform(post("/api/admin/schedule/availability")
+                        .with(csrf())
+                        .cookie(specialistCookies)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {
+                                  "officeId":%s,
+                                  "status":"BLOCKED",
+                                  "startsAt":"2031-04-02T09:30:00Z",
+                                  "endsAt":"2031-04-02T10:30:00Z"
+                                }
+                                """.formatted(officeId)))
+                .andExpect(status().isBadRequest());
+
+        mvc.perform(post("/api/admin/schedule/events")
+                        .with(csrf())
+                        .cookie(specialistCookies)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {
+                                  "serviceId":%s,
+                                  "officeId":%s,
+                                  "startsAt":"2031-04-02T09:30:00Z",
+                                  "endsAt":"2031-04-02T10:30:00Z",
+                                  "capacity":4,
+                                  "active":true
+                                }
+                                """.formatted(eventService.getId(), officeId)))
+                .andExpect(status().isBadRequest());
+
+        mvc.perform(get("/api/schedule/events")
+                        .param("from", "2031-04-01T00:00:00Z")
+                        .param("to", "2031-04-08T00:00:00Z")
+                        .param("serviceId", String.valueOf(eventService.getId())))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$[0].id").value(event.getId()))
+                .andExpect(jsonPath("$[0].remainingPlaces").value(1))
+                .andExpect(jsonPath("$[0].enrolled").value(false));
+
+        mvc.perform(post("/api/schedule/events/{id}/enroll", event.getId())
+                        .with(csrf())
+                        .cookie(firstUserCookies)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"reminderOptIn\":true}"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.enrolled").value(true))
+                .andExpect(jsonPath("$.remainingPlaces").value(0))
+                .andExpect(jsonPath("$.full").value(true));
+
+        mvc.perform(get("/api/admin/schedule/events/enrollments")
+                        .cookie(specialistCookies)
+                        .param("from", "2031-04-01T00:00:00Z")
+                        .param("to", "2031-04-08T00:00:00Z"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$[0].eventId").value(event.getId()))
+                .andExpect(jsonPath("$[0].eventTitle").value(eventService.getTitleUa()))
+                .andExpect(jsonPath("$[0].clientName").value("Booking Client"))
+                .andExpect(jsonPath("$[0].clientContact").value(firstUserPhone))
+                .andExpect(jsonPath("$[0].status").value("ACTIVE"))
+                .andExpect(jsonPath("$[0].reminderOptIn").value(true));
+
+        mvc.perform(get("/api/schedule/events")
+                        .cookie(firstUserCookies)
+                        .param("from", "2031-04-01T00:00:00Z")
+                        .param("to", "2031-04-08T00:00:00Z")
+                        .param("serviceId", String.valueOf(eventService.getId())))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$[0].id").value(event.getId()))
+                .andExpect(jsonPath("$[0].enrolled").value(true));
+
+        mvc.perform(get("/api/schedule/events/my")
+                        .cookie(firstUserCookies)
+                        .param("from", "2031-04-01T00:00:00Z")
+                        .param("to", "2031-04-08T00:00:00Z"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$[0].id").value(event.getId()))
+                .andExpect(jsonPath("$[0].enrolled").value(true))
+                .andExpect(jsonPath("$[0].remainingPlaces").value(0));
+
+        mvc.perform(post("/api/schedule/events/{id}/enroll", event.getId())
+                        .with(csrf())
+                        .cookie(secondUserCookies)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"reminderOptIn\":false}"))
+                .andExpect(status().isBadRequest());
+
+        mvc.perform(post("/api/schedule/events/{id}/cancel", event.getId())
+                        .with(csrf())
+                        .cookie(firstUserCookies))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.enrolled").value(false))
+                .andExpect(jsonPath("$.remainingPlaces").value(1));
+
+        mvc.perform(get("/api/schedule/events/my")
+                        .cookie(firstUserCookies)
+                        .param("from", "2031-04-01T00:00:00Z")
+                        .param("to", "2031-04-08T00:00:00Z"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$[0]").doesNotExist());
+
+        mvc.perform(post("/api/schedule/events/{id}/enroll", event.getId())
+                        .with(csrf())
+                        .cookie(secondUserCookies)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"reminderOptIn\":false}"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.enrolled").value(true))
+                .andExpect(jsonPath("$.remainingPlaces").value(0));
+    }
+
+    @Test
+    void specialistCanDeactivatePastFixedEventWithoutMovingItsTime() throws Exception {
+        Cookie[] specialistCookies = loginCookies(OWNER_PHONE);
+        long officeId = createOffice();
+        User specialist = userRepository.findByPhone(OWNER_PHONE).orElseThrow();
+        ServiceOffering eventService = new ServiceOffering();
+        eventService.setTitleUa("Минула подія " + PHONE_SUFFIX.incrementAndGet());
+        eventService.setDescriptionUa("Тест");
+        eventService.setDurationMinutes(90);
+        eventService.setBasePrice(BigDecimal.valueOf(700));
+        eventService.setBookingMode(ServiceBookingMode.FIXED_EVENT);
+        eventService.setActive(true);
+        eventService = serviceOfferingRepository.save(eventService);
+        FixedEvent event = new FixedEvent();
+        event.setService(eventService);
+        event.setSpecialist(specialist);
+        event.setOffice(officeRepository.findById(officeId).orElseThrow());
+        event.setStartsAt(java.time.OffsetDateTime.parse("2025-04-02T08:00:00Z"));
+        event.setEndsAt(java.time.OffsetDateTime.parse("2025-04-02T09:30:00Z"));
+        event.setCapacity(4);
+        event.setNote("Past event");
+        event.setActive(true);
+        event = fixedEventRepository.save(event);
+
+        mvc.perform(put("/api/admin/schedule/events/{id}", event.getId())
+                        .with(csrf())
+                        .cookie(specialistCookies)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {
+                                  "serviceId":%s,
+                                  "officeId":%s,
+                                  "startsAt":"2025-04-02T08:00:00Z",
+                                  "endsAt":"2025-04-02T09:30:00Z",
+                                  "capacity":4,
+                                  "note":"Past event hidden",
+                                  "active":false
+                                }
+                                """.formatted(eventService.getId(), officeId)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.active").value(false))
+                .andExpect(jsonPath("$.note").value("Past event hidden"));
+    }
+
     private long createAvailability(Cookie[] cookies, long officeId) throws Exception {
-        int day = 1 + Math.floorMod(PHONE_SUFFIX.incrementAndGet(), 20);
+        int day = AVAILABILITY_DAY.getAndIncrement();
         String startsAt = "2031-01-%02dT08:00:00Z".formatted(day);
         String endsAt = "2031-01-%02dT10:00:00Z".formatted(day);
 
+        return createAvailabilityWithRange(cookies, officeId, startsAt, endsAt);
+    }
+
+    private long createAvailabilityWithRange(Cookie[] cookies, long officeId, String startsAt, String endsAt) throws Exception {
         var result = mvc.perform(post("/api/admin/schedule/availability")
                         .with(csrf())
                         .cookie(cookies)

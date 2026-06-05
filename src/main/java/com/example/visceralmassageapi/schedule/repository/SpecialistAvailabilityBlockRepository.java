@@ -59,6 +59,44 @@ public interface SpecialistAvailabilityBlockRepository extends JpaRepository<Spe
     );
 
     @Query("""
+            SELECT block
+            FROM SpecialistAvailabilityBlock block
+            JOIN FETCH block.specialist specialist
+            LEFT JOIN FETCH block.office office
+            WHERE block.status = com.example.visceralmassageapi.schedule.domain.ScheduleBlockStatus.AVAILABLE
+              AND block.startsAt < :to
+              AND block.endsAt > :from
+              AND (:officeId IS NULL OR office.id = :officeId)
+              AND (:specialistId IS NULL OR specialist.id = :specialistId)
+            ORDER BY block.startsAt ASC, block.id ASC
+            """)
+    List<SpecialistAvailabilityBlock> findPublicAvailabilityBlocks(
+            OffsetDateTime from,
+            OffsetDateTime to,
+            Long officeId,
+            Long specialistId
+    );
+
+    @Query("""
+            SELECT block
+            FROM SpecialistAvailabilityBlock block
+            JOIN FETCH block.specialist specialist
+            LEFT JOIN FETCH block.office office
+            WHERE block.status = com.example.visceralmassageapi.schedule.domain.ScheduleBlockStatus.BLOCKED
+              AND block.startsAt < :to
+              AND block.endsAt > :from
+              AND (:officeId IS NULL OR office.id = :officeId)
+              AND (:specialistId IS NULL OR specialist.id = :specialistId)
+            ORDER BY block.startsAt ASC, block.id ASC
+            """)
+    List<SpecialistAvailabilityBlock> findPublicBlockedRange(
+            OffsetDateTime from,
+            OffsetDateTime to,
+            Long officeId,
+            Long specialistId
+    );
+
+    @Query("""
             SELECT COUNT(block) > 0
             FROM SpecialistAvailabilityBlock block
             WHERE block.specialist.id = :specialistId
@@ -67,4 +105,49 @@ public interface SpecialistAvailabilityBlockRepository extends JpaRepository<Spe
               AND block.endsAt > :startsAt
             """)
     boolean overlaps(long specialistId, Long excludedId, OffsetDateTime startsAt, OffsetDateTime endsAt);
+
+    @Query("""
+            SELECT COUNT(block) > 0
+            FROM SpecialistAvailabilityBlock block
+            WHERE block.specialist.id = :specialistId
+              AND block.status = :status
+              AND (:excludedId IS NULL OR block.id <> :excludedId)
+              AND block.startsAt < :endsAt
+              AND block.endsAt > :startsAt
+            """)
+    boolean overlapsStatus(
+            long specialistId,
+            com.example.visceralmassageapi.schedule.domain.ScheduleBlockStatus status,
+            Long excludedId,
+            OffsetDateTime startsAt,
+            OffsetDateTime endsAt
+    );
+
+    @Query("""
+            SELECT COUNT(block) > 0
+            FROM SpecialistAvailabilityBlock block
+            WHERE block.specialist.id = :specialistId
+              AND block.status = com.example.visceralmassageapi.schedule.domain.ScheduleBlockStatus.BLOCKED
+              AND block.startsAt < :endsAt
+              AND block.endsAt > :startsAt
+            """)
+    boolean overlapsBlocked(long specialistId, OffsetDateTime startsAt, OffsetDateTime endsAt);
+
+    @Query("""
+            SELECT block
+            FROM SpecialistAvailabilityBlock block
+            LEFT JOIN FETCH block.office office
+            WHERE block.specialist.id = :specialistId
+              AND block.status = com.example.visceralmassageapi.schedule.domain.ScheduleBlockStatus.BLOCKED
+              AND block.startsAt < :to
+              AND block.endsAt > :from
+              AND (office IS NULL OR :officeId IS NULL OR office.id = :officeId)
+            ORDER BY block.startsAt ASC, block.id ASC
+            """)
+    List<SpecialistAvailabilityBlock> findBlockedForAvailability(
+            long specialistId,
+            Long officeId,
+            OffsetDateTime from,
+            OffsetDateTime to
+    );
 }

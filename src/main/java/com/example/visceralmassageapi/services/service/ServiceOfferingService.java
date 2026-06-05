@@ -64,6 +64,7 @@ public class ServiceOfferingService {
         service.setDescriptionEn(normalizeOptional(request.getDescriptionEn()));
         service.setDurationMinutes(request.getDurationMinutes());
         service.setBasePrice(request.getBasePrice());
+        service.setBookingMode(request.getBookingMode());
         service.setActive(request.isActive());
         service.setExternalPaymentUrl(normalizeOptional(request.getExternalPaymentUrl()));
     }
@@ -95,6 +96,7 @@ public class ServiceOfferingService {
                 service.getDescriptionEn(),
                 service.getDurationMinutes(),
                 service.getBasePrice(),
+                service.getBookingMode(),
                 service.isActive(),
                 service.getExternalPaymentUrl(),
                 service.getCreatedAt(),
@@ -109,7 +111,8 @@ public class ServiceOfferingService {
                     service.getTitleEn(),
                     service.getDescriptionEn(),
                     service.getDurationMinutes(),
-                    service.getBasePrice()
+                    service.getBasePrice(),
+                    service.getBookingMode()
             );
         }
 
@@ -118,7 +121,8 @@ public class ServiceOfferingService {
                 service.getTitleUa(),
                 service.getDescriptionUa(),
                 service.getDurationMinutes(),
-                service.getBasePrice()
+                service.getBasePrice(),
+                service.getBookingMode()
         );
     }
 }

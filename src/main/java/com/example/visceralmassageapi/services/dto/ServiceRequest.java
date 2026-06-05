@@ -8,6 +8,8 @@ import jakarta.validation.constraints.Size;
 import lombok.Getter;
 import lombok.Setter;
 
+import com.example.visceralmassageapi.services.entity.ServiceBookingMode;
+
 import java.math.BigDecimal;
 
 @Getter
@@ -33,6 +35,9 @@ public class ServiceRequest {
     @NotNull
     @DecimalMin("0.00")
     private BigDecimal basePrice;
+
+    @NotNull
+    private ServiceBookingMode bookingMode = ServiceBookingMode.INDIVIDUAL_APPOINTMENT;
 
     private boolean active = true;
 

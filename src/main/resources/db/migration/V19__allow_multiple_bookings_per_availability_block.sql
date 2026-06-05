@@ -1,0 +1,1 @@
+DROP INDEX IF EXISTS uq_bookings_active_availability_block;

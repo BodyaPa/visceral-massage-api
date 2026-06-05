@@ -35,6 +35,10 @@ public class ServiceOffering {
     @Column(name = "base_price", nullable = false, precision = 12, scale = 2)
     private BigDecimal basePrice;
 
+    @Enumerated(EnumType.STRING)
+    @Column(name = "booking_mode", nullable = false, length = 32)
+    private ServiceBookingMode bookingMode = ServiceBookingMode.INDIVIDUAL_APPOINTMENT;
+
     @Column(nullable = false)
     private boolean active = true;
 

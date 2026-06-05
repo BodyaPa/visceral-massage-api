@@ -5,6 +5,10 @@ import com.example.visceralmassageapi.booking.dto.ManualBookingRequest;
 import com.example.visceralmassageapi.booking.service.BookingService;
 import com.example.visceralmassageapi.schedule.dto.SpecialistAvailabilityRequest;
 import com.example.visceralmassageapi.schedule.dto.SpecialistAvailabilityResponse;
+import com.example.visceralmassageapi.schedule.dto.SpecialistFixedEventEnrollmentResponse;
+import com.example.visceralmassageapi.schedule.dto.SpecialistFixedEventRequest;
+import com.example.visceralmassageapi.schedule.dto.SpecialistFixedEventResponse;
+import com.example.visceralmassageapi.schedule.service.FixedEventService;
 import com.example.visceralmassageapi.schedule.service.SpecialistScheduleService;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
@@ -23,6 +27,7 @@ public class SpecialistScheduleController {
 
     private final SpecialistScheduleService specialistScheduleService;
     private final BookingService bookingService;
+    private final FixedEventService fixedEventService;
 
     @GetMapping("/availability")
     public List<SpecialistAvailabilityResponse> listAvailability(
@@ -42,6 +47,41 @@ public class SpecialistScheduleController {
         return bookingService.listSpecialistBookings(currentUserId(authentication), from, to);
     }
 
+    @GetMapping("/events")
+    public List<SpecialistFixedEventResponse> listEvents(
+            Authentication authentication,
+            @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME) OffsetDateTime from,
+            @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME) OffsetDateTime to
+    ) {
+        return fixedEventService.listOwn(currentUserId(authentication), from, to);
+    }
+
+    @GetMapping("/events/enrollments")
+    public List<SpecialistFixedEventEnrollmentResponse> listEventEnrollments(
+            Authentication authentication,
+            @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME) OffsetDateTime from,
+            @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME) OffsetDateTime to
+    ) {
+        return fixedEventService.listOwnEnrollments(currentUserId(authentication), from, to);
+    }
+
+    @PostMapping("/events")
+    public ResponseEntity<SpecialistFixedEventResponse> createEvent(
+            Authentication authentication,
+            @Valid @RequestBody SpecialistFixedEventRequest request
+    ) {
+        return ResponseEntity.ok(fixedEventService.createOwn(currentUserId(authentication), request));
+    }
+
+    @PutMapping("/events/{id}")
+    public SpecialistFixedEventResponse updateEvent(
+            Authentication authentication,
+            @PathVariable long id,
+            @Valid @RequestBody SpecialistFixedEventRequest request
+    ) {
+        return fixedEventService.updateOwn(currentUserId(authentication), id, request);
+    }
+
     @PostMapping("/bookings")
     public ResponseEntity<SpecialistBookingResponse> createManualBooking(
             Authentication authentication,
@@ -56,6 +96,15 @@ public class SpecialistScheduleController {
             @Valid @RequestBody SpecialistAvailabilityRequest request
     ) {
         return ResponseEntity.ok(specialistScheduleService.createAvailability(currentUserId(authentication), request));
+    }
+
+    @PutMapping("/availability/{id}")
+    public SpecialistAvailabilityResponse updateAvailability(
+            Authentication authentication,
+            @PathVariable long id,
+            @Valid @RequestBody SpecialistAvailabilityRequest request
+    ) {
+        return specialistScheduleService.updateAvailability(currentUserId(authentication), id, request);
     }
 
     @DeleteMapping("/availability/{id}")

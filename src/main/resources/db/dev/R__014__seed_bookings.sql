@@ -32,14 +32,10 @@ FROM seed
 JOIN specialist_availability_blocks block ON block.notes LIKE '%' || seed.block_marker || '%'
 JOIN users client ON client.email = seed.client_email
 JOIN services service ON service.title_ua = seed.service_title
-ON CONFLICT (availability_block_id) WHERE status <> 'CANCELLED' DO UPDATE SET
-    user_id = EXCLUDED.user_id,
-    specialist_user_id = EXCLUDED.specialist_user_id,
-    service_id = EXCLUDED.service_id,
-    office_id = EXCLUDED.office_id,
-    status = EXCLUDED.status,
-    starts_at = EXCLUDED.starts_at,
-    ends_at = EXCLUDED.ends_at,
-    booked_price = EXCLUDED.booked_price,
-    reminder_opt_in = EXCLUDED.reminder_opt_in,
-    updated_at = NOW();
+WHERE NOT EXISTS (
+    SELECT 1
+    FROM bookings existing
+    WHERE existing.availability_block_id = block.id
+      AND existing.user_id = client.id
+      AND existing.status = seed.booking_status
+);

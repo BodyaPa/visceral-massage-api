@@ -16,8 +16,10 @@ import com.example.visceralmassageapi.common.exception.NotFoundException;
 import com.example.visceralmassageapi.offices.entity.Office;
 import com.example.visceralmassageapi.schedule.domain.ScheduleBlockStatus;
 import com.example.visceralmassageapi.schedule.domain.SpecialistAvailabilityBlock;
+import com.example.visceralmassageapi.schedule.repository.FixedEventRepository;
 import com.example.visceralmassageapi.schedule.repository.SpecialistAvailabilityBlockRepository;
 import com.example.visceralmassageapi.services.entity.ServiceOffering;
+import com.example.visceralmassageapi.services.entity.ServiceBookingMode;
 import com.example.visceralmassageapi.services.repository.ServiceOfferingRepository;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.Page;
@@ -26,7 +28,6 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.time.OffsetDateTime;
-import java.time.Duration;
 import java.time.temporal.ChronoUnit;
 import java.util.List;
 import java.util.Locale;
@@ -44,12 +45,20 @@ public class BookingService {
     private final SpecialistAvailabilityBlockRepository availabilityBlockRepository;
     private final ServiceOfferingRepository serviceOfferingRepository;
     private final AuditLogger auditLogger;
+    private final FixedEventRepository fixedEventRepository;
 
     @Transactional
     public BookingResponse create(long userId, BookingRequest request) {
         User user = userRepository.findById(userId)
                 .orElseThrow(() -> new NotFoundException("User not found"));
-        return toResponse(createBooking(user, request.availabilityBlockId(), request.serviceId(), request.reminderOptIn(), null));
+        return toResponse(createBooking(
+                user,
+                request.availabilityBlockId(),
+                request.serviceId(),
+                request.startsAt(),
+                request.reminderOptIn(),
+                null
+        ));
     }
 
     @Transactional
@@ -59,6 +68,7 @@ public class BookingService {
                 client,
                 request.availabilityBlockId(),
                 request.serviceId(),
+                request.startsAt(),
                 request.reminderOptIn(),
                 specialistId
         );
@@ -69,6 +79,7 @@ public class BookingService {
             User client,
             long availabilityBlockId,
             long serviceId,
+            OffsetDateTime requestedStartsAt,
             boolean reminderOptIn,
             Long requiredSpecialistId
     ) {
@@ -85,25 +96,37 @@ public class BookingService {
             throw new BadRequestException("Service is inactive");
         }
 
-        if (block.getStatus() != ScheduleBlockStatus.AVAILABLE) {
-            throw new BadRequestException("Availability block is not available");
+        if (service.getBookingMode() != ServiceBookingMode.INDIVIDUAL_APPOINTMENT) {
+            throw new BadRequestException("Fixed events must be booked through event enrollment");
         }
 
-        if (!block.getStartsAt().isAfter(OffsetDateTime.now())) {
-            throw new BadRequestException("Availability block has already started");
+        if (block.getStatus() != ScheduleBlockStatus.AVAILABLE) {
+            throw new BadRequestException("Availability block is not available");
         }
 
         if (block.getOffice() != null && !block.getOffice().isActive()) {
             throw new BadRequestException("Availability block office is inactive");
         }
 
-        if (Duration.between(block.getStartsAt(), block.getEndsAt()).toMinutes() < service.getDurationMinutes()) {
+        OffsetDateTime bookingStartsAt = requestedStartsAt == null ? block.getStartsAt() : requestedStartsAt;
+        OffsetDateTime bookingEndsAt = bookingStartsAt.plusMinutes(service.getDurationMinutes());
+
+        if (bookingStartsAt.isBefore(block.getStartsAt()) || bookingEndsAt.isAfter(block.getEndsAt())) {
             throw new BadRequestException("Availability block is shorter than the selected service");
         }
 
-        if (bookingRepository.existsByAvailabilityBlockIdAndStatusNot(block.getId(), BookingStatus.CANCELLED)) {
+        if (!bookingStartsAt.isAfter(OffsetDateTime.now())) {
+            throw new BadRequestException("Selected booking slot has already started");
+        }
+
+        if (bookingRepository.existsActiveOverlappingBooking(block.getId(), bookingStartsAt, bookingEndsAt)) {
             auditLogger.bookingConflict(block.getId(), requiredSpecialistId == null ? client.getId() : requiredSpecialistId);
-            throw new BadRequestException("Availability block is already booked");
+            throw new BadRequestException("Selected booking slot is already booked");
+        }
+
+        if (fixedEventRepository.overlapsActiveForSpecialist(block.getSpecialist().getId(), null, bookingStartsAt, bookingEndsAt)) {
+            auditLogger.bookingConflict(block.getId(), requiredSpecialistId == null ? client.getId() : requiredSpecialistId);
+            throw new BadRequestException("Selected booking slot overlaps a scheduled event");
         }
 
         Booking booking = new Booking();
@@ -113,8 +136,8 @@ public class BookingService {
         booking.setOffice(block.getOffice());
         booking.setAvailabilityBlock(block);
         booking.setStatus(BookingStatus.AWAITING_PAYMENT_CONFIRMATION);
-        booking.setStartsAt(block.getStartsAt());
-        booking.setEndsAt(block.getEndsAt());
+        booking.setStartsAt(bookingStartsAt);
+        booking.setEndsAt(bookingEndsAt);
         booking.setBookedPrice(service.getBasePrice());
         booking.setReminderOptIn(reminderOptIn);
 
@@ -140,6 +163,10 @@ public class BookingService {
 
         if (booking.getStatus() == BookingStatus.CANCELLED) {
             throw new BadRequestException("Booking is already cancelled");
+        }
+
+        if (!booking.getStartsAt().isAfter(OffsetDateTime.now())) {
+            throw new BadRequestException("Booking has already started");
         }
 
         booking.setStatus(BookingStatus.CANCELLED);
