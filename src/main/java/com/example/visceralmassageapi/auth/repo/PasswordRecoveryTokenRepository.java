@@ -10,11 +10,12 @@ import java.util.Optional;
 
 public interface PasswordRecoveryTokenRepository extends JpaRepository<PasswordRecoveryToken, Long> {
 
-    long countByEmailAndCreatedAtAfter(String email, OffsetDateTime createdAfter);
+    long countByContactTypeAndContactValueAndCreatedAtAfter(String contactType, String contactValue, OffsetDateTime createdAfter);
 
     @Lock(LockModeType.PESSIMISTIC_WRITE)
-    Optional<PasswordRecoveryToken> findFirstByEmailAndUsedAtIsNullAndExpiresAtAfterOrderByCreatedAtDesc(
-            String email,
+    Optional<PasswordRecoveryToken> findFirstByContactTypeAndContactValueAndUsedAtIsNullAndExpiresAtAfterOrderByCreatedAtDesc(
+            String contactType,
+            String contactValue,
             OffsetDateTime now
     );
 }

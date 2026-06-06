@@ -11,10 +11,12 @@ import lombok.Setter;
 @Setter
 public class PasswordRecoveryConfirmRequest {
 
-    @NotBlank
     @Email
     @Size(max = 254)
     private String email;
+
+    @Size(max = 32)
+    private String phone;
 
     @NotBlank
     @Pattern(regexp = "^\\d{6}$", message = "Recovery code must contain 6 digits")

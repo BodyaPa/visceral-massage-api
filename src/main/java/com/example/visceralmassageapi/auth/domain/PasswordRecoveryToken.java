@@ -29,8 +29,14 @@ public class PasswordRecoveryToken {
     @JoinColumn(name = "user_id", nullable = false)
     private User user;
 
-    @Column(nullable = false, length = 255)
+    @Column(length = 255)
     private String email;
+
+    @Column(name = "contact_type", nullable = false, length = 16)
+    private String contactType;
+
+    @Column(name = "contact_value", nullable = false, length = 255)
+    private String contactValue;
 
     @Column(name = "code_hash", nullable = false, length = 64, unique = true)
     private String codeHash;

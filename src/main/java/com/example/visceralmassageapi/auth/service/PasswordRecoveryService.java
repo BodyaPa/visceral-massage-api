@@ -41,15 +41,21 @@ public class PasswordRecoveryService {
 
     @Transactional
     public void request(PasswordRecoveryRequest request) {
-        String email = normalizeEmail(request.getEmail());
-        var user = userRepository.findByEmail(email).filter(found -> found.isEnabled()).orElse(null);
+        RecoveryContact contact = recoveryContact(request.getEmail(), request.getPhone());
+        var user = contact.type().equals("EMAIL")
+                ? userRepository.findByEmail(contact.value()).filter(found -> found.isEnabled()).orElse(null)
+                : userRepository.findByPhone(contact.value()).filter(found -> found.isEnabled()).orElse(null);
 
         if (user == null) {
             return;
         }
 
         OffsetDateTime now = OffsetDateTime.now();
-        long recentRequests = tokenRepository.countByEmailAndCreatedAtAfter(email, now.minusMinutes(REQUEST_WINDOW_MINUTES));
+        long recentRequests = tokenRepository.countByContactTypeAndContactValueAndCreatedAtAfter(
+                contact.type(),
+                contact.value(),
+                now.minusMinutes(REQUEST_WINDOW_MINUTES)
+        );
         if (recentRequests >= MAX_REQUESTS_PER_WINDOW) {
             return;
         }
@@ -59,25 +65,39 @@ public class PasswordRecoveryService {
 
         PasswordRecoveryToken token = new PasswordRecoveryToken();
         token.setUser(user);
-        token.setEmail(email);
+        token.setEmail(contact.type().equals("EMAIL") ? contact.value() : null);
+        token.setContactType(contact.type());
+        token.setContactValue(contact.value());
         token.setCodeSalt(salt);
         token.setCodeHash(hashCode(salt, code));
         token.setExpiresAt(now.plusMinutes(CODE_TTL_MINUTES));
         tokenRepository.save(token);
 
-        notificationService.sendEmail(
-                email,
-                "Ataraksia password recovery",
-                "Your Ataraksia password recovery code is: %s%nIt expires in %d minutes.".formatted(code, CODE_TTL_MINUTES)
+        if (contact.type().equals("EMAIL")) {
+            notificationService.sendEmail(
+                    contact.value(),
+                    "Ataraksia password recovery",
+                    "Your Ataraksia password recovery code is: %s%nIt expires in %d minutes.".formatted(code, CODE_TTL_MINUTES)
+            );
+            return;
+        }
+
+        notificationService.sendSms(
+                contact.value(),
+                "Ataraksia recovery code: %s. Expires in %d minutes.".formatted(code, CODE_TTL_MINUTES)
         );
     }
 
     @Transactional
     public void confirm(PasswordRecoveryConfirmRequest request) {
-        String email = normalizeEmail(request.getEmail());
+        RecoveryContact contact = recoveryContact(request.getEmail(), request.getPhone());
         OffsetDateTime now = OffsetDateTime.now();
         PasswordRecoveryToken token = tokenRepository
-                .findFirstByEmailAndUsedAtIsNullAndExpiresAtAfterOrderByCreatedAtDesc(email, now)
+                .findFirstByContactTypeAndContactValueAndUsedAtIsNullAndExpiresAtAfterOrderByCreatedAtDesc(
+                        contact.type(),
+                        contact.value(),
+                        now
+                )
                 .orElseThrow(() -> new BadRequestException(GENERIC_INVALID_CODE));
 
         if (token.getAttempts() >= MAX_CONFIRM_ATTEMPTS) {
@@ -121,5 +141,47 @@ public class PasswordRecoveryService {
 
     private String normalizeEmail(String email) {
         return email.trim().toLowerCase(Locale.ROOT);
+    }
+
+    private RecoveryContact recoveryContact(String email, String phone) {
+        String normalizedEmail = email == null || email.isBlank() ? null : normalizeEmail(email);
+        String normalizedPhone = phone == null || phone.isBlank() ? null : normalizePhone(phone);
+
+        if (normalizedEmail == null && normalizedPhone == null) {
+            throw new BadRequestException("Email or phone is required");
+        }
+        if (normalizedEmail != null && normalizedPhone != null) {
+            throw new BadRequestException("Use either email or phone");
+        }
+
+        return normalizedEmail != null
+                ? new RecoveryContact("EMAIL", normalizedEmail)
+                : new RecoveryContact("PHONE", normalizedPhone);
+    }
+
+    private String normalizePhone(String phone) {
+        String cleaned = phone
+                .trim()
+                .replace(" ", "")
+                .replace("-", "")
+                .replace("(", "")
+                .replace(")", "");
+
+        if (cleaned.matches("^0\\d{9}$")) {
+            cleaned = "+380" + cleaned.substring(1);
+        }
+
+        if (!cleaned.startsWith("+")) {
+            cleaned = "+" + cleaned;
+        }
+
+        if (!cleaned.matches("^\\+[1-9]\\d{9,14}$")) {
+            throw new BadRequestException("Invalid phone format");
+        }
+
+        return cleaned;
+    }
+
+    private record RecoveryContact(String type, String value) {
     }
 }

@@ -41,6 +41,8 @@ app:
   notifications:
     email:
       transport: disabled
+    sms:
+      transport: disabled
   owner:
     bootstrap:
       enabled: ${OWNER_BOOTSTRAP_ENABLED:false}

@@ -336,6 +336,52 @@ class AuthFlowIT extends IntegrationTestBase {
                 .andExpect(status().isOk());
     }
 
+    @Test
+    void passwordRecoveryByPhone_changesPasswordWhenPhoneWasRegistered() throws Exception {
+        mvc.perform(post("/api/auth/register").with(csrf())
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {"phone":"0671234599","email":null,"firstName":"Anna","lastName":"Lis","password":"Passw0rd!Secure"}
+                                """))
+                .andExpect(status().isOk());
+
+        reset(notificationService);
+        mvc.perform(post("/api/auth/password-recovery/request").with(csrf())
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {"phone":"0671234599"}
+                                """))
+                .andExpect(status().isNoContent());
+
+        ArgumentCaptor<String> bodyCaptor = ArgumentCaptor.forClass(String.class);
+        verify(notificationService).sendSms(
+                eq("+380671234599"),
+                bodyCaptor.capture()
+        );
+        String code = extractRecoveryCode(bodyCaptor.getValue());
+
+        mvc.perform(post("/api/auth/password-recovery/confirm").with(csrf())
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {"phone":"0671234599","code":"%s","newPassword":"NewPassw0rd!Secure"}
+                                """.formatted(code)))
+                .andExpect(status().isNoContent());
+
+        mvc.perform(post("/api/auth/login").with(csrf())
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {"identifier":"0671234599","password":"Passw0rd!Secure"}
+                                """))
+                .andExpect(status().isBadRequest());
+
+        mvc.perform(post("/api/auth/login").with(csrf())
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {"identifier":"0671234599","password":"NewPassw0rd!Secure"}
+                                """))
+                .andExpect(status().isOk());
+    }
+
     private Cookie findCookie(Cookie[] cookies, String name) {
         return Arrays.stream(cookies)
                 .filter(cookie -> name.equals(cookie.getName()))

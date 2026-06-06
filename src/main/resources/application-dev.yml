@@ -44,6 +44,8 @@ app:
     email:
       transport: smtp
       from: ${DEV_MAIL_FROM:no-reply@ataraksia.local}
+    sms:
+      transport: disabled
   owner:
     bootstrap:
       enabled: ${OWNER_BOOTSTRAP_ENABLED:false}
