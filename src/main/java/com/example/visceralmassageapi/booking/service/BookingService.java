@@ -129,6 +129,17 @@ public class BookingService {
             throw new BadRequestException("Selected booking slot overlaps a scheduled event");
         }
 
+        Long officeId = block.getOffice() == null ? null : block.getOffice().getId();
+        if (availabilityBlockRepository.overlapsBlockedForAvailability(
+                block.getSpecialist().getId(),
+                officeId,
+                bookingStartsAt,
+                bookingEndsAt
+        )) {
+            auditLogger.bookingConflict(block.getId(), requiredSpecialistId == null ? client.getId() : requiredSpecialistId);
+            throw new BadRequestException("Selected booking slot is blocked");
+        }
+
         Booking booking = new Booking();
         booking.setUser(client);
         booking.setSpecialist(block.getSpecialist());
@@ -249,6 +260,7 @@ public class BookingService {
                 client.getPhone() != null ? client.getPhone() : client.getEmail(),
                 service.getId(),
                 service.getTitleUa(),
+                service.getExternalPaymentUrl(),
                 booking.getBookedPrice(),
                 specialist.getId(),
                 displayName(specialist),

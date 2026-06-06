@@ -25,6 +25,8 @@ app:
   notifications:
     email:
       transport: disabled
+    sms:
+      transport: disabled
   media:
     storage-directory: ./build/test-media
     max-file-size-bytes: 26214400

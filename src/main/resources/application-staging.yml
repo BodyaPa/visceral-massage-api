@@ -15,7 +15,7 @@ spring:
     hibernate:
       ddl-auto: validate
   flyway:
-    locations: classpath:db/migration
+    locations: classpath:db/migration,classpath:db/dev
   mail:
     host: mailpit
     port: 1025
@@ -49,8 +49,13 @@ app:
     sameSite: Lax
   notifications:
     email:
-      transport: smtp
+      transport: ${NOTIFICATIONS_EMAIL_TRANSPORT:smtp}
       from: ${STAGING_MAIL_FROM:no-reply@staging.ataraksia.local}
+    sms:
+      transport: ${NOTIFICATIONS_SMS_TRANSPORT:disabled}
+    reminders:
+      enabled: ${NOTIFICATIONS_REMINDERS_ENABLED:false}
+      fixed-delay-ms: ${NOTIFICATIONS_REMINDERS_FIXED_DELAY_MS:300000}
   owner:
     bootstrap:
       enabled: ${OWNER_BOOTSTRAP_ENABLED:false}

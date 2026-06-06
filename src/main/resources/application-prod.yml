@@ -40,7 +40,13 @@ app:
     sameSite: Lax
   notifications:
     email:
-      transport: disabled
+      transport: ${NOTIFICATIONS_EMAIL_TRANSPORT:disabled}
+      from: ${MAIL_FROM:no-reply@ataraksia.local}
+    sms:
+      transport: ${NOTIFICATIONS_SMS_TRANSPORT:disabled}
+    reminders:
+      enabled: ${NOTIFICATIONS_REMINDERS_ENABLED:false}
+      fixed-delay-ms: ${NOTIFICATIONS_REMINDERS_FIXED_DELAY_MS:300000}
   owner:
     bootstrap:
       enabled: ${OWNER_BOOTSTRAP_ENABLED:false}

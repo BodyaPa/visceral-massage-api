@@ -238,6 +238,7 @@ class BookingFlowIT extends IntegrationTestBase {
     @Test
     void blockedTimeInsideAvailabilityCutsGeneratedSlots() throws Exception {
         Cookie[] specialistCookies = loginCookies(OWNER_PHONE);
+        Cookie[] userCookies = loginCookies(createUser());
         long officeId = createOffice();
         long serviceId = createService(true);
         long blockId = createAvailabilityWithRange(
@@ -275,6 +276,20 @@ class BookingFlowIT extends IntegrationTestBase {
                 .andExpect(jsonPath("$[2].startsAt").value("2031-07-02T11:00:00Z"))
                 .andExpect(jsonPath("$[2].endsAt").value("2031-07-02T12:00:00Z"))
                 .andExpect(jsonPath("$[3]").doesNotExist());
+
+        mvc.perform(post("/api/bookings")
+                        .with(csrf())
+                        .cookie(userCookies)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {
+                                  "availabilityBlockId":%s,
+                                  "serviceId":%s,
+                                  "startsAt":"2031-07-02T09:00:00Z",
+                                  "reminderOptIn":false
+                                }
+                                """.formatted(blockId, serviceId)))
+                .andExpect(status().isBadRequest());
     }
 
     @Test
@@ -360,7 +375,8 @@ class BookingFlowIT extends IntegrationTestBase {
                         .param("to", "2031-02-01T00:00:00Z"))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.content[?(@.id == %s)]".formatted(bookingId)).exists())
-                .andExpect(jsonPath("$.content[?(@.id == %s)].basePrice".formatted(bookingId)).value(1200.0));
+                .andExpect(jsonPath("$.content[?(@.id == %s)].externalPaymentUrl".formatted(bookingId)).value("https://pay.example.com/test"))
+                .andExpect(jsonPath("$.content[?(@.id == %s)].bookedPrice".formatted(bookingId)).value(1200.0));
 
         mvc.perform(get("/api/admin/finance/bookings")
                         .cookie(specialistCookies)

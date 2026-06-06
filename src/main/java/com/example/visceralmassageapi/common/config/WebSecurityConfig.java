@@ -38,8 +38,11 @@ public class WebSecurityConfig {
                         // auth open only for POST endpoints
                         .requestMatchers(HttpMethod.POST, "/api/auth/login").permitAll()
                         .requestMatchers(HttpMethod.POST, "/api/auth/register").permitAll()
+                        .requestMatchers(HttpMethod.POST, "/api/auth/register/confirm").permitAll()
                         .requestMatchers(HttpMethod.POST, "/api/auth/refresh").permitAll()
                         .requestMatchers(HttpMethod.POST, "/api/auth/logout").permitAll()
+                        .requestMatchers(HttpMethod.POST, "/api/auth/password-recovery/request").permitAll()
+                        .requestMatchers(HttpMethod.POST, "/api/auth/password-recovery/confirm").permitAll()
                         .requestMatchers(HttpMethod.GET, "/api/auth/csrf").permitAll()
 
                         // but ME must require login

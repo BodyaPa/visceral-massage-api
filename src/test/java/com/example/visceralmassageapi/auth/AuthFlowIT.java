@@ -1,17 +1,25 @@
 package com.example.visceralmassageapi.auth;
 
 import com.example.visceralmassageapi.IntegrationTestBase;
+import com.example.visceralmassageapi.notifications.service.NotificationService;
 import jakarta.servlet.http.Cookie;
 import org.junit.jupiter.api.Test;
+import org.mockito.ArgumentCaptor;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.MediaType;
+import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.test.web.servlet.MockMvc;
 
 import java.util.Arrays;
+import java.util.regex.Pattern;
 
 import static org.hamcrest.Matchers.containsString;
 import static org.hamcrest.Matchers.everyItem;
 import static org.hamcrest.Matchers.notNullValue;
+import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.reset;
+import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.verifyNoInteractions;
 import static org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.csrf;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.*;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.*;
@@ -19,14 +27,31 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 class AuthFlowIT extends IntegrationTestBase {
 
     @Autowired MockMvc mvc;
+    @MockitoBean NotificationService notificationService;
 
     @Test
-    void register_setsCookies() throws Exception {
+    void register_requiresMessageConfirmationBeforeSettingCookies() throws Exception {
         mvc.perform(post("/api/auth/register").with(csrf())
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("""
-                                {"phone":"380000000001","email":null,"firstName":"Iryna","lastName":"Koval","password":"Passw0rd!Secure"}
+                                {"phone":null,"email":"register@example.com","firstName":"Iryna","lastName":"Koval","password":"Passw0rd!Secure"}
                                 """))
+                .andExpect(status().isNoContent())
+                .andExpect(header().doesNotExist("Set-Cookie"));
+
+        ArgumentCaptor<String> bodyCaptor = ArgumentCaptor.forClass(String.class);
+        verify(notificationService).sendEmail(
+                eq("register@example.com"),
+                eq("Ataraksia registration confirmation"),
+                bodyCaptor.capture()
+        );
+        String code = extractCode(bodyCaptor.getValue());
+
+        mvc.perform(post("/api/auth/register/confirm").with(csrf())
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {"email":"register@example.com","code":"%s"}
+                                """.formatted(code)))
                 .andExpect(status().isOk())
                 .andExpect(header().stringValues("Set-Cookie", notNullValue()))
                 .andExpect(header().stringValues("Set-Cookie", everyItem(containsString("HttpOnly"))))
@@ -90,13 +115,11 @@ class AuthFlowIT extends IntegrationTestBase {
 
     @Test
     void login_then_me_works_withCookies() throws Exception {
-        // register
-        mvc.perform(post("/api/auth/register").with(csrf())
-                        .contentType(MediaType.APPLICATION_JSON)
-                        .content("""
-                                {"phone":"+380000000002","email":null,"firstName":"Олена","lastName":"Коваль","password":"Passw0rd!Secure"}
-                                """))
-                .andExpect(status().isOk());
+        registerAndConfirm("""
+                {"phone":"+380000000002","email":null,"firstName":"Олена","lastName":"Коваль","password":"Passw0rd!Secure"}
+                """, """
+                {"phone":"+380000000002","code":"%s"}
+                """, false);
 
         // login
         var loginRes = mvc.perform(post("/api/auth/login").with(csrf())
@@ -119,12 +142,11 @@ class AuthFlowIT extends IntegrationTestBase {
 
     @Test
     void emailOnlyRegistration_canLoginByEmail() throws Exception {
-        mvc.perform(post("/api/auth/register").with(csrf())
-                        .contentType(MediaType.APPLICATION_JSON)
-                        .content("""
-                                {"phone":null,"email":"USER@EXAMPLE.COM","firstName":"Anna","lastName":"Lis","password":"Passw0rd!Secure"}
-                                """))
-                .andExpect(status().isOk())
+        registerAndConfirm("""
+                {"phone":null,"email":"USER@EXAMPLE.COM","firstName":"Anna","lastName":"Lis","password":"Passw0rd!Secure"}
+                """, """
+                {"email":"user@example.com","code":"%s"}
+                """, true)
                 .andExpect(jsonPath("$.phone").doesNotExist())
                 .andExpect(jsonPath("$.email").value("user@example.com"));
 
@@ -139,12 +161,11 @@ class AuthFlowIT extends IntegrationTestBase {
 
     @Test
     void ukrainianLocalPhoneRegistration_canLoginWithLocalPhone() throws Exception {
-        mvc.perform(post("/api/auth/register").with(csrf())
-                        .contentType(MediaType.APPLICATION_JSON)
-                        .content("""
-                                {"phone":"0671234567","email":null,"firstName":"Anna","lastName":"Lis","password":"Passw0rd!Secure"}
-                                """))
-                .andExpect(status().isOk())
+        registerAndConfirm("""
+                {"phone":"0671234567","email":null,"firstName":"Anna","lastName":"Lis","password":"Passw0rd!Secure"}
+                """, """
+                {"phone":"0671234567","code":"%s"}
+                """, false)
                 .andExpect(jsonPath("$.phone").value("+380671234567"));
 
         mvc.perform(post("/api/auth/login").with(csrf())
@@ -158,12 +179,11 @@ class AuthFlowIT extends IntegrationTestBase {
 
     @Test
     void loginDoesNotRevealWhetherIdentifierOrPasswordIsWrong() throws Exception {
-        mvc.perform(post("/api/auth/register").with(csrf())
-                        .contentType(MediaType.APPLICATION_JSON)
-                        .content("""
-                                {"phone":null,"email":"secure@example.com","firstName":"Anna","lastName":"Lis","password":"Passw0rd!Secure"}
-                                """))
-                .andExpect(status().isOk());
+        registerAndConfirm("""
+                {"phone":null,"email":"secure@example.com","firstName":"Anna","lastName":"Lis","password":"Passw0rd!Secure"}
+                """, """
+                {"email":"secure@example.com","code":"%s"}
+                """, true);
 
         mvc.perform(post("/api/auth/login").with(csrf())
                         .contentType(MediaType.APPLICATION_JSON)
@@ -190,12 +210,11 @@ class AuthFlowIT extends IntegrationTestBase {
 
     @Test
     void refresh_updatesCookies() throws Exception {
-        mvc.perform(post("/api/auth/register").with(csrf())
-                        .contentType(MediaType.APPLICATION_JSON)
-                        .content("""
-                                {"phone":"+380000000003","email":null,"firstName":"Iryna","lastName":"Koval","password":"Passw0rd!Secure"}
-                                """))
-                .andExpect(status().isOk());
+        registerAndConfirm("""
+                {"phone":"+380000000003","email":null,"firstName":"Iryna","lastName":"Koval","password":"Passw0rd!Secure"}
+                """, """
+                {"phone":"+380000000003","code":"%s"}
+                """, false);
 
         var loginRes = mvc.perform(post("/api/auth/login").with(csrf())
                         .contentType(MediaType.APPLICATION_JSON)
@@ -223,12 +242,11 @@ class AuthFlowIT extends IntegrationTestBase {
 
     @Test
     void logout_revokesRefreshToken() throws Exception {
-        var registerRes = mvc.perform(post("/api/auth/register").with(csrf())
-                        .contentType(MediaType.APPLICATION_JSON)
-                        .content("""
-                                {"phone":"+380000000004","email":null,"firstName":"Iryna","lastName":"Koval","password":"Passw0rd!Secure"}
-                                """))
-                .andExpect(status().isOk())
+        var registerRes = registerAndConfirm("""
+                {"phone":"+380000000004","email":null,"firstName":"Iryna","lastName":"Koval","password":"Passw0rd!Secure"}
+                """, """
+                {"phone":"+380000000004","code":"%s"}
+                """, false)
                 .andReturn();
 
         var refreshCookie = findCookie(registerRes.getResponse().getCookies(), "refresh_token");
@@ -242,12 +260,11 @@ class AuthFlowIT extends IntegrationTestBase {
 
     @Test
     void accessToken_cannotBeUsedAsRefreshToken() throws Exception {
-        var registerRes = mvc.perform(post("/api/auth/register").with(csrf())
-                        .contentType(MediaType.APPLICATION_JSON)
-                        .content("""
-                                {"phone":"+380000000005","email":null,"firstName":"Iryna","lastName":"Koval","password":"Passw0rd!Secure"}
-                                """))
-                .andExpect(status().isOk())
+        var registerRes = registerAndConfirm("""
+                {"phone":"+380000000005","email":null,"firstName":"Iryna","lastName":"Koval","password":"Passw0rd!Secure"}
+                """, """
+                {"phone":"+380000000005","code":"%s"}
+                """, false)
                 .andReturn();
 
         var accessValue = findCookie(registerRes.getResponse().getCookies(), "access_token").getValue();
@@ -258,12 +275,11 @@ class AuthFlowIT extends IntegrationTestBase {
 
     @Test
     void refreshToken_cannotBeUsedAsAccessToken() throws Exception {
-        var registerRes = mvc.perform(post("/api/auth/register").with(csrf())
-                        .contentType(MediaType.APPLICATION_JSON)
-                        .content("""
-                                {"phone":"+380000000006","email":null,"firstName":"Iryna","lastName":"Koval","password":"Passw0rd!Secure"}
-                                """))
-                .andExpect(status().isOk())
+        var registerRes = registerAndConfirm("""
+                {"phone":"+380000000006","email":null,"firstName":"Iryna","lastName":"Koval","password":"Passw0rd!Secure"}
+                """, """
+                {"phone":"+380000000006","code":"%s"}
+                """, false)
                 .andReturn();
 
         var refreshValue = findCookie(registerRes.getResponse().getCookies(), "refresh_token").getValue();
@@ -272,10 +288,145 @@ class AuthFlowIT extends IntegrationTestBase {
                 .andExpect(status().isForbidden());
     }
 
+    @Test
+    void passwordRecoveryByEmail_changesPasswordWithoutRevealingMissingAccounts() throws Exception {
+        registerAndConfirm("""
+                {"phone":null,"email":"recover@example.com","firstName":"Anna","lastName":"Lis","password":"Passw0rd!Secure"}
+                """, """
+                {"email":"recover@example.com","code":"%s"}
+                """, true);
+
+        reset(notificationService);
+        mvc.perform(post("/api/auth/password-recovery/request").with(csrf())
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {"email":"missing@example.com"}
+                                """))
+                .andExpect(status().isNoContent());
+        verifyNoInteractions(notificationService);
+
+        mvc.perform(post("/api/auth/password-recovery/request").with(csrf())
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {"email":"recover@example.com"}
+                                """))
+                .andExpect(status().isNoContent());
+
+        ArgumentCaptor<String> bodyCaptor = ArgumentCaptor.forClass(String.class);
+        verify(notificationService).sendEmail(
+                eq("recover@example.com"),
+                eq("Ataraksia password recovery"),
+                bodyCaptor.capture()
+        );
+        String code = extractCode(bodyCaptor.getValue());
+
+        mvc.perform(post("/api/auth/password-recovery/confirm").with(csrf())
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {"email":"recover@example.com","code":"%s","newPassword":"NewPassw0rd!Secure"}
+                                """.formatted(code)))
+                .andExpect(status().isNoContent());
+
+        mvc.perform(post("/api/auth/login").with(csrf())
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {"identifier":"recover@example.com","password":"Passw0rd!Secure"}
+                                """))
+                .andExpect(status().isBadRequest());
+
+        mvc.perform(post("/api/auth/login").with(csrf())
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {"identifier":"recover@example.com","password":"NewPassw0rd!Secure"}
+                                """))
+                .andExpect(status().isOk());
+    }
+
+    @Test
+    void passwordRecoveryByPhone_changesPasswordWhenPhoneWasRegistered() throws Exception {
+        registerAndConfirm("""
+                {"phone":"0671234599","email":null,"firstName":"Anna","lastName":"Lis","password":"Passw0rd!Secure"}
+                """, """
+                {"phone":"0671234599","code":"%s"}
+                """, false);
+
+        reset(notificationService);
+        mvc.perform(post("/api/auth/password-recovery/request").with(csrf())
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {"phone":"0671234599"}
+                                """))
+                .andExpect(status().isNoContent());
+
+        ArgumentCaptor<String> bodyCaptor = ArgumentCaptor.forClass(String.class);
+        verify(notificationService).sendSms(
+                eq("+380671234599"),
+                bodyCaptor.capture()
+        );
+        String code = extractCode(bodyCaptor.getValue());
+
+        mvc.perform(post("/api/auth/password-recovery/confirm").with(csrf())
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {"phone":"0671234599","code":"%s","newPassword":"NewPassw0rd!Secure"}
+                                """.formatted(code)))
+                .andExpect(status().isNoContent());
+
+        mvc.perform(post("/api/auth/login").with(csrf())
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {"identifier":"0671234599","password":"Passw0rd!Secure"}
+                                """))
+                .andExpect(status().isBadRequest());
+
+        mvc.perform(post("/api/auth/login").with(csrf())
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {"identifier":"0671234599","password":"NewPassw0rd!Secure"}
+                                """))
+                .andExpect(status().isOk());
+    }
+
+    private org.springframework.test.web.servlet.ResultActions registerAndConfirm(String registrationJson, String confirmationTemplate, boolean emailMessage) throws Exception {
+        reset(notificationService);
+        mvc.perform(post("/api/auth/register").with(csrf())
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(registrationJson))
+                .andExpect(status().isNoContent());
+
+        ArgumentCaptor<String> bodyCaptor = ArgumentCaptor.forClass(String.class);
+        if (emailMessage) {
+            verify(notificationService).sendEmail(
+                    org.mockito.ArgumentMatchers.anyString(),
+                    eq("Ataraksia registration confirmation"),
+                    bodyCaptor.capture()
+            );
+        } else {
+            verify(notificationService).sendSms(
+                    org.mockito.ArgumentMatchers.anyString(),
+                    bodyCaptor.capture()
+            );
+        }
+
+        String code = extractCode(bodyCaptor.getValue());
+        return mvc.perform(post("/api/auth/register/confirm").with(csrf())
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(confirmationTemplate.formatted(code)))
+                .andExpect(status().isOk());
+    }
+
     private Cookie findCookie(Cookie[] cookies, String name) {
         return Arrays.stream(cookies)
                 .filter(cookie -> name.equals(cookie.getName()))
                 .findFirst()
                 .orElseThrow();
+    }
+
+    private String extractCode(String body) {
+        var matcher = Pattern.compile("\\b\\d{6}\\b").matcher(body);
+        if (!matcher.find()) {
+            throw new AssertionError("Message did not contain a 6-digit code");
+        }
+        return matcher.group();
     }
 }

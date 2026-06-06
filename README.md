@@ -83,6 +83,12 @@ The `staging` profile keeps production-like database, cookie and CORS settings,
 but sends application email only to the Mailpit service on the private Compose
 network. It does not expose a staging email test API.
 
+For the current test staging phase, `staging` also runs Flyway seed migrations
+from `classpath:db/dev` so demo users, offices, services, schedule, bookings,
+expenses and fixed events are available after startup. Remove `classpath:db/dev`
+from `application-staging.yml` before using staging as a clean pre-production
+environment.
+
 Start staging from `deploy/` using the production base file and the staging
 override:
 

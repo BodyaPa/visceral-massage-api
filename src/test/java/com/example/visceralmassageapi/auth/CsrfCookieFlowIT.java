@@ -45,14 +45,14 @@ class CsrfCookieFlowIT extends IntegrationTestBase {
         Cookie csrfCookie = findCookie(csrfResponse.getResponse().getCookies(), "XSRF-TOKEN");
         String token = objectMapper.readTree(csrfResponse.getResponse().getContentAsString()).path("token").asText();
 
-        mvc.perform(post("/api/auth/register")
+        mvc.perform(post("/api/auth/password-recovery/request")
                         .cookie(csrfCookie)
                         .header("X-XSRF-TOKEN", token)
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("""
-                                {"phone":"380000000012","email":null,"firstName":"Iryna","lastName":"Koval","password":"Passw0rd!Secure"}
+                                {"email":"missing@example.com"}
                                 """))
-                .andExpect(status().isOk());
+                .andExpect(status().isNoContent());
     }
 
     @Test

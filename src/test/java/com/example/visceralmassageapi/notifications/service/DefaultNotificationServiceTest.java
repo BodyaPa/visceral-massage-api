@@ -1,6 +1,7 @@
 package com.example.visceralmassageapi.notifications.service;
 
 import com.example.visceralmassageapi.notifications.email.EmailSender;
+import com.example.visceralmassageapi.notifications.sms.SmsSender;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.InjectMocks;
@@ -13,6 +14,7 @@ import static org.mockito.Mockito.verify;
 class DefaultNotificationServiceTest {
 
     @Mock EmailSender emailSender;
+    @Mock SmsSender smsSender;
 
     @InjectMocks DefaultNotificationService notificationService;
 
@@ -21,5 +23,12 @@ class DefaultNotificationServiceTest {
         notificationService.sendEmail("client@example.com", "Subject", "Message");
 
         verify(emailSender).send("client@example.com", "Subject", "Message");
+    }
+
+    @Test
+    void sendSmsDelegatesToConfiguredSmsSender() {
+        notificationService.sendSms("+380671234567", "Message");
+
+        verify(smsSender).send("+380671234567", "Message");
     }
 }

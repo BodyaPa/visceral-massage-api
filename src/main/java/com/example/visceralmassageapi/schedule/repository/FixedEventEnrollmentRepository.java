@@ -52,4 +52,21 @@ public interface FixedEventEnrollmentRepository extends JpaRepository<FixedEvent
             ORDER BY event.startsAt ASC, enrollment.createdAt ASC, enrollment.id ASC
             """)
     List<FixedEventEnrollment> findForSpecialistEvents(long specialistId, OffsetDateTime from, OffsetDateTime to);
+
+    @Query("""
+            SELECT enrollment
+            FROM FixedEventEnrollment enrollment
+            JOIN FETCH enrollment.user
+            JOIN FETCH enrollment.event event
+            JOIN FETCH event.service
+            LEFT JOIN FETCH event.office
+            WHERE enrollment.reminderOptIn = true
+              AND enrollment.reminderSentAt IS NULL
+              AND enrollment.status = com.example.visceralmassageapi.schedule.domain.FixedEventEnrollmentStatus.ACTIVE
+              AND event.active = true
+              AND event.startsAt > :now
+              AND event.startsAt <= :remindBefore
+            ORDER BY event.startsAt ASC, enrollment.id ASC
+            """)
+    List<FixedEventEnrollment> findDueEventReminders(OffsetDateTime now, OffsetDateTime remindBefore);
 }
