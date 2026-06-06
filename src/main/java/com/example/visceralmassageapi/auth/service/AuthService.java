@@ -1,18 +1,22 @@
 package com.example.visceralmassageapi.auth.service;
 
 import com.example.visceralmassageapi.auth.domain.RefreshToken;
+import com.example.visceralmassageapi.auth.domain.RegistrationVerificationToken;
 import com.example.visceralmassageapi.auth.domain.User;
 import com.example.visceralmassageapi.auth.domain.UserRole;
 import com.example.visceralmassageapi.auth.dto.LoginRequest;
+import com.example.visceralmassageapi.auth.dto.RegisterConfirmRequest;
 import com.example.visceralmassageapi.auth.dto.RegisterRequest;
 import com.example.visceralmassageapi.auth.dto.UserDto;
 import com.example.visceralmassageapi.auth.repo.RefreshTokenRepository;
+import com.example.visceralmassageapi.auth.repo.RegistrationVerificationTokenRepository;
 import com.example.visceralmassageapi.auth.repo.UserRepository;
 import com.example.visceralmassageapi.common.audit.AuditLogger;
 import com.example.visceralmassageapi.common.config.CookieProps;
 import com.example.visceralmassageapi.common.exception.BadRequestException;
 import com.example.visceralmassageapi.common.exception.NotFoundException;
 import com.example.visceralmassageapi.common.security.JwtService;
+import com.example.visceralmassageapi.notifications.service.NotificationService;
 import io.jsonwebtoken.JwtException;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.ResponseCookie;
@@ -23,7 +27,9 @@ import org.springframework.transaction.annotation.Transactional;
 import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
+import java.security.SecureRandom;
 import java.time.OffsetDateTime;
+import java.util.Base64;
 import java.util.Comparator;
 import java.util.HexFormat;
 import java.util.Locale;
@@ -36,16 +42,24 @@ public class AuthService {
 
     public static final String ACCESS_COOKIE = "access_token";
     public static final String REFRESH_COOKIE = "refresh_token";
+    private static final int REGISTRATION_CODE_TTL_MINUTES = 15;
+    private static final int MAX_REGISTRATION_CONFIRM_ATTEMPTS = 5;
+    private static final int MAX_REGISTRATION_REQUESTS_PER_WINDOW = 3;
+    private static final int REGISTRATION_REQUEST_WINDOW_MINUTES = 15;
+    private static final String GENERIC_INVALID_REGISTRATION_CODE = "Invalid or expired registration code";
 
     private final UserRepository userRepository;
     private final RefreshTokenRepository refreshTokenRepository;
+    private final RegistrationVerificationTokenRepository registrationTokenRepository;
     private final PasswordEncoder passwordEncoder;
     private final JwtService jwtService;
     private final CookieProps cookieProps;
     private final AuditLogger auditLogger;
+    private final NotificationService notificationService;
+    private final SecureRandom secureRandom = new SecureRandom();
 
     @Transactional
-    public AuthResult register(RegisterRequest req) {
+    public void requestRegistration(RegisterRequest req) {
         String phone = normalizeOptionalPhone(req.getPhone());
         String email = normalizeEmail(req.getEmail());
         String firstName = normalizeName(req.getFirstName());
@@ -59,16 +73,85 @@ public class AuthService {
             throw new BadRequestException("Account already registered");
         }
 
+        RegistrationContact contact = registrationContact(email, phone);
+        OffsetDateTime now = OffsetDateTime.now();
+        long recentRequests = registrationTokenRepository.countByContactTypeAndContactValueAndCreatedAtAfter(
+                contact.type(),
+                contact.value(),
+                now.minusMinutes(REGISTRATION_REQUEST_WINDOW_MINUTES)
+        );
+        if (recentRequests >= MAX_REGISTRATION_REQUESTS_PER_WINDOW) {
+            throw new BadRequestException("Too many registration requests");
+        }
+
+        String code = generateCode();
+        String salt = generateSalt();
+
+        RegistrationVerificationToken token = new RegistrationVerificationToken();
+        token.setPhone(phone);
+        token.setEmail(email);
+        token.setFirstName(firstName);
+        token.setLastName(lastName);
+        token.setPasswordHash(passwordEncoder.encode(req.getPassword()));
+        token.setContactType(contact.type());
+        token.setContactValue(contact.value());
+        token.setCodeSalt(salt);
+        token.setCodeHash(hashCode(salt, code));
+        token.setExpiresAt(now.plusMinutes(REGISTRATION_CODE_TTL_MINUTES));
+        registrationTokenRepository.save(token);
+
+        if (contact.type().equals("EMAIL")) {
+            notificationService.sendEmail(
+                    contact.value(),
+                    "Ataraksia registration confirmation",
+                    "Your Ataraksia registration code is: %s%nIt expires in %d minutes.".formatted(code, REGISTRATION_CODE_TTL_MINUTES)
+            );
+            return;
+        }
+
+        notificationService.sendSms(
+                contact.value(),
+                "Ataraksia registration code: %s. Expires in %d minutes.".formatted(code, REGISTRATION_CODE_TTL_MINUTES)
+        );
+    }
+
+    @Transactional
+    public AuthResult confirmRegistration(RegisterConfirmRequest req) {
+        RegistrationContact contact = registrationContact(normalizeEmail(req.getEmail()), normalizeOptionalPhone(req.getPhone()));
+        OffsetDateTime now = OffsetDateTime.now();
+        RegistrationVerificationToken token = registrationTokenRepository
+                .findFirstByContactTypeAndContactValueAndUsedAtIsNullAndExpiresAtAfterOrderByCreatedAtDesc(
+                        contact.type(),
+                        contact.value(),
+                        now
+                )
+                .orElseThrow(() -> new BadRequestException(GENERIC_INVALID_REGISTRATION_CODE));
+
+        if (token.getAttempts() >= MAX_REGISTRATION_CONFIRM_ATTEMPTS) {
+            throw new BadRequestException(GENERIC_INVALID_REGISTRATION_CODE);
+        }
+
+        token.setAttempts(token.getAttempts() + 1);
+        if (!hashCode(token.getCodeSalt(), req.getCode()).equals(token.getCodeHash())) {
+            throw new BadRequestException(GENERIC_INVALID_REGISTRATION_CODE);
+        }
+
+        if (token.getPhone() != null && userRepository.existsByPhone(token.getPhone())
+                || token.getEmail() != null && userRepository.existsByEmail(token.getEmail())) {
+            throw new BadRequestException("Account already registered");
+        }
+
         User u = new User();
-        u.setPhone(phone);
-        u.setEmail(email);
-        u.setFirstName(firstName);
-        u.setLastName(lastName);
-        u.setPasswordHash(passwordEncoder.encode(req.getPassword()));
+        u.setPhone(token.getPhone());
+        u.setEmail(token.getEmail());
+        u.setFirstName(token.getFirstName());
+        u.setLastName(token.getLastName());
+        u.setPasswordHash(token.getPasswordHash());
         u.getRoles().add(UserRole.USER);
         u.setEnabled(true);
 
         u = userRepository.save(u);
+        token.setUsedAt(now);
 
         AuthResult result = issueTokens(u);
         auditLogger.userRegistered(u.getId());
@@ -189,13 +272,31 @@ public class AuthService {
     }
 
     private String hashToken(String token) {
+        return sha256(token);
+    }
+
+    private String hashCode(String salt, String code) {
+        return sha256(salt + ":" + code);
+    }
+
+    private String sha256(String value) {
         try {
             byte[] digest = MessageDigest.getInstance("SHA-256")
-                    .digest(token.getBytes(StandardCharsets.UTF_8));
+                    .digest(value.getBytes(StandardCharsets.UTF_8));
             return HexFormat.of().formatHex(digest);
         } catch (NoSuchAlgorithmException ex) {
             throw new IllegalStateException("SHA-256 algorithm is not available", ex);
         }
+    }
+
+    private String generateCode() {
+        return "%06d".formatted(secureRandom.nextInt(1_000_000));
+    }
+
+    private String generateSalt() {
+        byte[] bytes = new byte[18];
+        secureRandom.nextBytes(bytes);
+        return Base64.getUrlEncoder().withoutPadding().encodeToString(bytes);
     }
 
     private User findByIdentifier(String identifier) {
@@ -250,6 +351,18 @@ public class AuthService {
 
     private String normalizeName(String name) {
         return name.trim().replaceAll("\\s+", " ");
+    }
+
+    private RegistrationContact registrationContact(String email, String phone) {
+        if (email == null && phone == null) {
+            throw new BadRequestException("Phone or email is required");
+        }
+        return email != null
+                ? new RegistrationContact("EMAIL", email)
+                : new RegistrationContact("PHONE", phone);
+    }
+
+    private record RegistrationContact(String type, String value) {
     }
 
     public record AuthResult(User user, ResponseCookie accessCookie, ResponseCookie refreshCookie) {

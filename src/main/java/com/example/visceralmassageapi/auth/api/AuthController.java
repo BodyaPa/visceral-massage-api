@@ -3,6 +3,7 @@ package com.example.visceralmassageapi.auth.api;
 import com.example.visceralmassageapi.auth.dto.LoginRequest;
 import com.example.visceralmassageapi.auth.dto.PasswordRecoveryConfirmRequest;
 import com.example.visceralmassageapi.auth.dto.PasswordRecoveryRequest;
+import com.example.visceralmassageapi.auth.dto.RegisterConfirmRequest;
 import com.example.visceralmassageapi.auth.dto.RegisterRequest;
 import com.example.visceralmassageapi.auth.dto.UserDto;
 import com.example.visceralmassageapi.auth.service.AuthService;
@@ -30,8 +31,14 @@ public class AuthController {
     private final CookieCsrfTokenRepository csrfTokenRepository;
 
     @PostMapping("/register")
-    public ResponseEntity<UserDto> register(@Valid @RequestBody RegisterRequest req) {
-        var result = authService.register(req);
+    public ResponseEntity<Void> requestRegistration(@Valid @RequestBody RegisterRequest req) {
+        authService.requestRegistration(req);
+        return ResponseEntity.noContent().build();
+    }
+
+    @PostMapping("/register/confirm")
+    public ResponseEntity<UserDto> confirmRegistration(@Valid @RequestBody RegisterConfirmRequest req) {
+        var result = authService.confirmRegistration(req);
 
         return ResponseEntity.ok()
                 .header(HttpHeaders.SET_COOKIE, result.accessCookie().toString())

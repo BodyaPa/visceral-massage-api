@@ -1,18 +1,24 @@
 package com.example.visceralmassageapi.media;
 
 import com.example.visceralmassageapi.IntegrationTestBase;
+import com.example.visceralmassageapi.notifications.service.NotificationService;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import jakarta.servlet.http.Cookie;
 import org.junit.jupiter.api.Test;
+import org.mockito.ArgumentCaptor;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.MediaType;
 import org.springframework.mock.web.MockMultipartFile;
 import org.springframework.test.context.DynamicPropertyRegistry;
 import org.springframework.test.context.DynamicPropertySource;
+import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.test.web.servlet.MockMvc;
 
 import java.util.Arrays;
+import java.util.regex.Pattern;
 
+import static org.mockito.Mockito.reset;
+import static org.mockito.Mockito.verify;
 import static org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.csrf;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.delete;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
@@ -33,6 +39,7 @@ class AdminMediaAccessIT extends IntegrationTestBase {
 
     @Autowired MockMvc mvc;
     @Autowired ObjectMapper objectMapper;
+    @MockitoBean NotificationService notificationService;
 
     @DynamicPropertySource
     static void mediaProperties(DynamicPropertyRegistry registry) {
@@ -134,15 +141,34 @@ class AdminMediaAccessIT extends IntegrationTestBase {
     }
 
     private Cookie[] registerUserCookies(String phone) throws Exception {
-        return mvc.perform(post("/api/auth/register").with(csrf())
+        reset(notificationService);
+        mvc.perform(post("/api/auth/register").with(csrf())
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("""
                                 {"phone":"%s","email":null,"firstName":"Iryna","lastName":"Koval","password":"Passw0rd!Secure"}
                                 """.formatted(phone)))
+                .andExpect(status().isNoContent());
+
+        ArgumentCaptor<String> bodyCaptor = ArgumentCaptor.forClass(String.class);
+        verify(notificationService).sendSms(org.mockito.ArgumentMatchers.anyString(), bodyCaptor.capture());
+
+        return mvc.perform(post("/api/auth/register/confirm").with(csrf())
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {"phone":"%s","code":"%s"}
+                                """.formatted(phone, extractCode(bodyCaptor.getValue()))))
                 .andExpect(status().isOk())
                 .andReturn()
                 .getResponse()
                 .getCookies();
+    }
+
+    private String extractCode(String body) {
+        var matcher = Pattern.compile("\\b\\d{6}\\b").matcher(body);
+        if (!matcher.find()) {
+            throw new AssertionError("Message did not contain a 6-digit code");
+        }
+        return matcher.group();
     }
 
     private Cookie[] loginAdminCookies() throws Exception {
