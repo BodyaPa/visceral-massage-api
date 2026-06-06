@@ -57,6 +57,9 @@ public class Booking {
     @Column(name = "reminder_opt_in", nullable = false)
     private boolean reminderOptIn;
 
+    @Column(name = "reminder_sent_at")
+    private OffsetDateTime reminderSentAt;
+
     @Column(name = "created_at", nullable = false)
     private OffsetDateTime createdAt;
 

@@ -1,17 +1,25 @@
 package com.example.visceralmassageapi.auth;
 
 import com.example.visceralmassageapi.IntegrationTestBase;
+import com.example.visceralmassageapi.notifications.service.NotificationService;
 import jakarta.servlet.http.Cookie;
 import org.junit.jupiter.api.Test;
+import org.mockito.ArgumentCaptor;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.boot.test.mock.mockito.MockBean;
 import org.springframework.http.MediaType;
 import org.springframework.test.web.servlet.MockMvc;
 
 import java.util.Arrays;
+import java.util.regex.Pattern;
 
 import static org.hamcrest.Matchers.containsString;
 import static org.hamcrest.Matchers.everyItem;
 import static org.hamcrest.Matchers.notNullValue;
+import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.reset;
+import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.verifyNoInteractions;
 import static org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.csrf;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.*;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.*;
@@ -19,6 +27,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 class AuthFlowIT extends IntegrationTestBase {
 
     @Autowired MockMvc mvc;
+    @MockBean NotificationService notificationService;
 
     @Test
     void register_setsCookies() throws Exception {
@@ -272,10 +281,73 @@ class AuthFlowIT extends IntegrationTestBase {
                 .andExpect(status().isForbidden());
     }
 
+    @Test
+    void passwordRecoveryByEmail_changesPasswordWithoutRevealingMissingAccounts() throws Exception {
+        mvc.perform(post("/api/auth/register").with(csrf())
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {"phone":null,"email":"recover@example.com","firstName":"Anna","lastName":"Lis","password":"Passw0rd!Secure"}
+                                """))
+                .andExpect(status().isOk());
+
+        reset(notificationService);
+        mvc.perform(post("/api/auth/password-recovery/request").with(csrf())
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {"email":"missing@example.com"}
+                                """))
+                .andExpect(status().isNoContent());
+        verifyNoInteractions(notificationService);
+
+        mvc.perform(post("/api/auth/password-recovery/request").with(csrf())
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {"email":"recover@example.com"}
+                                """))
+                .andExpect(status().isNoContent());
+
+        ArgumentCaptor<String> bodyCaptor = ArgumentCaptor.forClass(String.class);
+        verify(notificationService).sendEmail(
+                eq("recover@example.com"),
+                eq("Ataraksia password recovery"),
+                bodyCaptor.capture()
+        );
+        String code = extractRecoveryCode(bodyCaptor.getValue());
+
+        mvc.perform(post("/api/auth/password-recovery/confirm").with(csrf())
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {"email":"recover@example.com","code":"%s","newPassword":"NewPassw0rd!Secure"}
+                                """.formatted(code)))
+                .andExpect(status().isNoContent());
+
+        mvc.perform(post("/api/auth/login").with(csrf())
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {"identifier":"recover@example.com","password":"Passw0rd!Secure"}
+                                """))
+                .andExpect(status().isBadRequest());
+
+        mvc.perform(post("/api/auth/login").with(csrf())
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {"identifier":"recover@example.com","password":"NewPassw0rd!Secure"}
+                                """))
+                .andExpect(status().isOk());
+    }
+
     private Cookie findCookie(Cookie[] cookies, String name) {
         return Arrays.stream(cookies)
                 .filter(cookie -> name.equals(cookie.getName()))
                 .findFirst()
                 .orElseThrow();
+    }
+
+    private String extractRecoveryCode(String body) {
+        var matcher = Pattern.compile("\\b\\d{6}\\b").matcher(body);
+        if (!matcher.find()) {
+            throw new AssertionError("Recovery email did not contain a 6-digit code");
+        }
+        return matcher.group();
     }
 }

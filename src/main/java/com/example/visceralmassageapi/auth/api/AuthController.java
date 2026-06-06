@@ -1,9 +1,12 @@
 package com.example.visceralmassageapi.auth.api;
 
 import com.example.visceralmassageapi.auth.dto.LoginRequest;
+import com.example.visceralmassageapi.auth.dto.PasswordRecoveryConfirmRequest;
+import com.example.visceralmassageapi.auth.dto.PasswordRecoveryRequest;
 import com.example.visceralmassageapi.auth.dto.RegisterRequest;
 import com.example.visceralmassageapi.auth.dto.UserDto;
 import com.example.visceralmassageapi.auth.service.AuthService;
+import com.example.visceralmassageapi.auth.service.PasswordRecoveryService;
 import jakarta.servlet.http.Cookie;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
@@ -23,6 +26,7 @@ import org.springframework.security.web.csrf.CsrfToken;
 public class AuthController {
 
     private final AuthService authService;
+    private final PasswordRecoveryService passwordRecoveryService;
     private final CookieCsrfTokenRepository csrfTokenRepository;
 
     @PostMapping("/register")
@@ -60,6 +64,21 @@ public class AuthController {
     public ResponseEntity<Void> logout(HttpServletRequest request) {
         authService.logout(readOptionalCookie(request, AuthService.REFRESH_COOKIE));
 
+        return ResponseEntity.noContent()
+                .header(HttpHeaders.SET_COOKIE, authService.clearAccessCookie().toString())
+                .header(HttpHeaders.SET_COOKIE, authService.clearRefreshCookie().toString())
+                .build();
+    }
+
+    @PostMapping("/password-recovery/request")
+    public ResponseEntity<Void> requestPasswordRecovery(@Valid @RequestBody PasswordRecoveryRequest request) {
+        passwordRecoveryService.request(request);
+        return ResponseEntity.noContent().build();
+    }
+
+    @PostMapping("/password-recovery/confirm")
+    public ResponseEntity<Void> confirmPasswordRecovery(@Valid @RequestBody PasswordRecoveryConfirmRequest request) {
+        passwordRecoveryService.confirm(request);
         return ResponseEntity.noContent()
                 .header(HttpHeaders.SET_COOKIE, authService.clearAccessCookie().toString())
                 .header(HttpHeaders.SET_COOKIE, authService.clearRefreshCookie().toString())

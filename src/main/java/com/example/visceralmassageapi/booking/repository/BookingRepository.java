@@ -107,4 +107,19 @@ public interface BookingRepository extends JpaRepository<Booking, Long>, JpaSpec
             ORDER BY booking.startsAt ASC, booking.id ASC
             """)
     List<Booking> findPublicOccupiedBookings(OffsetDateTime from, OffsetDateTime to, Long officeId, Long specialistId);
+
+    @Query("""
+            SELECT booking
+            FROM Booking booking
+            JOIN FETCH booking.user
+            JOIN FETCH booking.service
+            LEFT JOIN FETCH booking.office
+            WHERE booking.reminderOptIn = true
+              AND booking.reminderSentAt IS NULL
+              AND booking.status = com.example.visceralmassageapi.booking.domain.BookingStatus.CONFIRMED
+              AND booking.startsAt > :now
+              AND booking.startsAt <= :remindBefore
+            ORDER BY booking.startsAt ASC, booking.id ASC
+            """)
+    List<Booking> findDueAppointmentReminders(OffsetDateTime now, OffsetDateTime remindBefore);
 }
