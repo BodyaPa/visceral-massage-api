@@ -134,6 +134,23 @@ public interface SpecialistAvailabilityBlockRepository extends JpaRepository<Spe
     boolean overlapsBlocked(long specialistId, OffsetDateTime startsAt, OffsetDateTime endsAt);
 
     @Query("""
+            SELECT COUNT(block) > 0
+            FROM SpecialistAvailabilityBlock block
+            LEFT JOIN block.office office
+            WHERE block.specialist.id = :specialistId
+              AND block.status = com.example.visceralmassageapi.schedule.domain.ScheduleBlockStatus.BLOCKED
+              AND block.startsAt < :endsAt
+              AND block.endsAt > :startsAt
+              AND (office IS NULL OR :officeId IS NULL OR office.id = :officeId)
+            """)
+    boolean overlapsBlockedForAvailability(
+            long specialistId,
+            Long officeId,
+            OffsetDateTime startsAt,
+            OffsetDateTime endsAt
+    );
+
+    @Query("""
             SELECT block
             FROM SpecialistAvailabilityBlock block
             LEFT JOIN FETCH block.office office
