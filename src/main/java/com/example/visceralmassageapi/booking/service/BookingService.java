@@ -260,6 +260,7 @@ public class BookingService {
                 client.getPhone() != null ? client.getPhone() : client.getEmail(),
                 service.getId(),
                 service.getTitleUa(),
+                service.getExternalPaymentUrl(),
                 booking.getBookedPrice(),
                 specialist.getId(),
                 displayName(specialist),

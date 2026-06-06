@@ -13,6 +13,7 @@ public record FinanceBookingResponse(
         String clientContact,
         long serviceId,
         String serviceTitleUa,
+        String externalPaymentUrl,
         BigDecimal bookedPrice,
         long specialistId,
         String specialistName,

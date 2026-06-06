@@ -375,6 +375,7 @@ class BookingFlowIT extends IntegrationTestBase {
                         .param("to", "2031-02-01T00:00:00Z"))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.content[?(@.id == %s)]".formatted(bookingId)).exists())
+                .andExpect(jsonPath("$.content[?(@.id == %s)].externalPaymentUrl".formatted(bookingId)).value("https://pay.example.com/test"))
                 .andExpect(jsonPath("$.content[?(@.id == %s)].bookedPrice".formatted(bookingId)).value(1200.0));
 
         mvc.perform(get("/api/admin/finance/bookings")
