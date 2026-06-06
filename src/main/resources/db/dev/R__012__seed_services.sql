@@ -4,7 +4,12 @@ WITH seed(title_ua, description_ua, title_en, description_en, duration_minutes, 
         ('Консультація', 'Первинна консультація та план подальшої роботи.', 'Consultation', 'Initial consultation and a plan for further work.', 45, 800.00, 'INDIVIDUAL_APPOINTMENT', TRUE, 'https://example.com/dev-pay/consultation'),
         ('Комплексний терапевтичний сеанс', 'Розширений комплексний сеанс тривалістю 90 хвилин.', 'Comprehensive therapy session', 'An extended comprehensive 90-minute session.', 90, 2200.00, 'INDIVIDUAL_APPOINTMENT', TRUE, 'https://example.com/dev-pay/comprehensive-session'),
         ('Груповий сеанс', 'Фіксована групова подія з обмеженою кількістю місць.', 'Group session', 'A fixed group event with limited capacity.', 90, 1200.00, 'FIXED_EVENT', TRUE, 'https://example.com/dev-pay/group-session'),
-        ('Неактивна тестова послуга', 'Dev-запис для перевірки фільтра неактивних послуг.', 'Inactive test service', 'Dev record used to verify inactive service filters.', 30, 500.00, 'INDIVIDUAL_APPOINTMENT', FALSE, NULL)
+        ('Неактивна тестова послуга', 'Dev-запис для перевірки фільтра неактивних послуг.', 'Inactive test service', 'Dev record used to verify inactive service filters.', 30, 500.00, 'INDIVIDUAL_APPOINTMENT', FALSE, NULL),
+        ('Діагностична зустріч', 'Коротка зустріч для оцінки стану та підбору формату роботи.', 'Diagnostic meeting', 'A short assessment meeting before choosing a care format.', 30, 600.00, 'INDIVIDUAL_APPOINTMENT', TRUE, 'https://example.com/dev-pay/diagnostic-meeting'),
+        ('Вечірній відновлювальний сеанс', 'Індивідуальний вечірній сеанс після робочого дня.', 'Evening recovery session', 'An individual evening recovery session after a workday.', 75, 1800.00, 'INDIVIDUAL_APPOINTMENT', TRUE, 'https://example.com/dev-pay/evening-recovery'),
+        ('Парний навчальний воркшоп', 'Фіксована подія для невеликої групи з практичним блоком.', 'Partner workshop', 'A fixed small-group workshop with a practical block.', 120, 1600.00, 'FIXED_EVENT', TRUE, 'https://example.com/dev-pay/partner-workshop'),
+        ('Безкоштовний тестовий слот', 'Нульова ціна для перевірки фінансових і booking edge cases.', 'Free test slot', 'Zero-price service for finance and booking edge cases.', 30, 0.00, 'INDIVIDUAL_APPOINTMENT', TRUE, NULL),
+        ('Архівна групова подія', 'Неактивна подія для перевірки фільтрів послуг.', 'Archived group event', 'Inactive event service for service filter checks.', 60, 700.00, 'FIXED_EVENT', FALSE, NULL)
 )
 UPDATE services service
 SET description_ua = seed.description_ua,
@@ -25,7 +30,12 @@ WITH seed(title_ua, description_ua, title_en, description_en, duration_minutes, 
         ('Консультація', 'Первинна консультація та план подальшої роботи.', 'Consultation', 'Initial consultation and a plan for further work.', 45, 800.00, 'INDIVIDUAL_APPOINTMENT', TRUE, 'https://example.com/dev-pay/consultation'),
         ('Комплексний терапевтичний сеанс', 'Розширений комплексний сеанс тривалістю 90 хвилин.', 'Comprehensive therapy session', 'An extended comprehensive 90-minute session.', 90, 2200.00, 'INDIVIDUAL_APPOINTMENT', TRUE, 'https://example.com/dev-pay/comprehensive-session'),
         ('Груповий сеанс', 'Фіксована групова подія з обмеженою кількістю місць.', 'Group session', 'A fixed group event with limited capacity.', 90, 1200.00, 'FIXED_EVENT', TRUE, 'https://example.com/dev-pay/group-session'),
-        ('Неактивна тестова послуга', 'Dev-запис для перевірки фільтра неактивних послуг.', 'Inactive test service', 'Dev record used to verify inactive service filters.', 30, 500.00, 'INDIVIDUAL_APPOINTMENT', FALSE, NULL)
+        ('Неактивна тестова послуга', 'Dev-запис для перевірки фільтра неактивних послуг.', 'Inactive test service', 'Dev record used to verify inactive service filters.', 30, 500.00, 'INDIVIDUAL_APPOINTMENT', FALSE, NULL),
+        ('Діагностична зустріч', 'Коротка зустріч для оцінки стану та підбору формату роботи.', 'Diagnostic meeting', 'A short assessment meeting before choosing a care format.', 30, 600.00, 'INDIVIDUAL_APPOINTMENT', TRUE, 'https://example.com/dev-pay/diagnostic-meeting'),
+        ('Вечірній відновлювальний сеанс', 'Індивідуальний вечірній сеанс після робочого дня.', 'Evening recovery session', 'An individual evening recovery session after a workday.', 75, 1800.00, 'INDIVIDUAL_APPOINTMENT', TRUE, 'https://example.com/dev-pay/evening-recovery'),
+        ('Парний навчальний воркшоп', 'Фіксована подія для невеликої групи з практичним блоком.', 'Partner workshop', 'A fixed small-group workshop with a practical block.', 120, 1600.00, 'FIXED_EVENT', TRUE, 'https://example.com/dev-pay/partner-workshop'),
+        ('Безкоштовний тестовий слот', 'Нульова ціна для перевірки фінансових і booking edge cases.', 'Free test slot', 'Zero-price service for finance and booking edge cases.', 30, 0.00, 'INDIVIDUAL_APPOINTMENT', TRUE, NULL),
+        ('Архівна групова подія', 'Неактивна подія для перевірки фільтрів послуг.', 'Archived group event', 'Inactive event service for service filter checks.', 60, 700.00, 'FIXED_EVENT', FALSE, NULL)
 )
 INSERT INTO services (
     title_ua, description_ua, title_en, description_en, duration_minutes,
