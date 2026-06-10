@@ -1,6 +1,7 @@
 package com.example.visceralmassageapi.schedule.service;
 
 import com.example.visceralmassageapi.auth.domain.User;
+import com.example.visceralmassageapi.auth.domain.UserRole;
 import com.example.visceralmassageapi.auth.repo.UserRepository;
 import com.example.visceralmassageapi.booking.repository.BookingRepository;
 import com.example.visceralmassageapi.common.exception.BadRequestException;
@@ -24,6 +25,7 @@ import com.example.visceralmassageapi.services.entity.ServiceOffering;
 import com.example.visceralmassageapi.services.repository.ServiceOfferingRepository;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
+import org.springframework.security.access.AccessDeniedException;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.time.OffsetDateTime;
@@ -161,8 +163,14 @@ public class FixedEventService {
 
     @Transactional(readOnly = true)
     public List<SpecialistFixedEventResponse> listOwn(long specialistId, OffsetDateTime from, OffsetDateTime to) {
+        return listOwn(specialistId, from, to, null);
+    }
+
+    @Transactional(readOnly = true)
+    public List<SpecialistFixedEventResponse> listOwn(long actorId, OffsetDateTime from, OffsetDateTime to, Long requestedSpecialistId) {
         validateRange(from, to);
-        return fixedEventRepository.findOwnRange(specialistId, from, to)
+        long specialistId = resolveManagedSpecialistId(actorId, requestedSpecialistId);
+        return fixedEventRepository.findManagedRange(specialistId, from, to)
                 .stream()
                 .map(this::toSpecialistResponse)
                 .toList();
@@ -170,7 +178,13 @@ public class FixedEventService {
 
     @Transactional(readOnly = true)
     public List<SpecialistFixedEventEnrollmentResponse> listOwnEnrollments(long specialistId, OffsetDateTime from, OffsetDateTime to) {
+        return listOwnEnrollments(specialistId, from, to, null);
+    }
+
+    @Transactional(readOnly = true)
+    public List<SpecialistFixedEventEnrollmentResponse> listOwnEnrollments(long actorId, OffsetDateTime from, OffsetDateTime to, Long requestedSpecialistId) {
         validateRange(from, to);
+        long specialistId = resolveManagedSpecialistId(actorId, requestedSpecialistId);
         return fixedEventEnrollmentRepository.findForSpecialistEvents(specialistId, from, to)
                 .stream()
                 .map(this::toSpecialistEnrollmentResponse)
@@ -178,7 +192,8 @@ public class FixedEventService {
     }
 
     @Transactional
-    public SpecialistFixedEventResponse createOwn(long specialistId, SpecialistFixedEventRequest request) {
+    public SpecialistFixedEventResponse createOwn(long actorId, SpecialistFixedEventRequest request) {
+        long specialistId = resolveManagedSpecialistId(actorId, request.specialistId());
         User specialist = userRepository.findById(specialistId)
                 .orElseThrow(() -> new NotFoundException("Specialist not found"));
         ServiceOffering service = serviceOfferingRepository.findById(request.serviceId())
@@ -201,13 +216,12 @@ public class FixedEventService {
     }
 
     @Transactional
-    public SpecialistFixedEventResponse updateOwn(long specialistId, long eventId, SpecialistFixedEventRequest request) {
+    public SpecialistFixedEventResponse updateOwn(long actorId, long eventId, SpecialistFixedEventRequest request) {
         FixedEvent event = fixedEventRepository.findById(eventId)
                 .orElseThrow(() -> new NotFoundException("Event not found"));
 
-        if (!event.getSpecialist().getId().equals(specialistId)) {
-            throw new NotFoundException("Event not found");
-        }
+        ensureCanManageEvent(actorId, event);
+        long specialistId = event.getSpecialist().getId();
 
         ServiceOffering service = serviceOfferingRepository.findById(request.serviceId())
                 .orElseThrow(() -> new NotFoundException("Service not found"));
@@ -232,6 +246,40 @@ public class FixedEventService {
         event.setActive(request.active());
 
         return toSpecialistResponse(event);
+    }
+
+    private long resolveManagedSpecialistId(long actorId, Long requestedSpecialistId) {
+        User actor = userRepository.findById(actorId)
+                .orElseThrow(() -> new NotFoundException("Specialist not found"));
+        if (!actor.getRoles().contains(UserRole.SPECIALIST)) {
+            throw new AccessDeniedException("Specialist role is required");
+        }
+        if (requestedSpecialistId == null || requestedSpecialistId.equals(actorId)) {
+            return requestedSpecialistId == null ? actorId : requestedSpecialistId;
+        }
+        if (!actor.getRoles().contains(UserRole.MASTER)) {
+            throw new AccessDeniedException("MASTER role is required to manage another specialist schedule");
+        }
+        User specialist = userRepository.findById(requestedSpecialistId)
+                .orElseThrow(() -> new NotFoundException("Specialist not found"));
+        if (!specialist.getRoles().contains(UserRole.SPECIALIST)) {
+            throw new AccessDeniedException("Specialist role is required");
+        }
+        return requestedSpecialistId;
+    }
+
+    private void ensureCanManageEvent(long actorId, FixedEvent event) {
+        User actor = userRepository.findById(actorId)
+                .orElseThrow(() -> new NotFoundException("Specialist not found"));
+        if (!actor.getRoles().contains(UserRole.SPECIALIST)) {
+            throw new AccessDeniedException("Specialist role is required");
+        }
+        if (event.getSpecialist().getId().equals(actorId)) {
+            return;
+        }
+        if (!actor.getRoles().contains(UserRole.MASTER)) {
+            throw new AccessDeniedException("MASTER role is required to manage another specialist schedule");
+        }
     }
 
     private void validateRange(OffsetDateTime from, OffsetDateTime to) {
@@ -339,6 +387,8 @@ public class FixedEventService {
 
         return new SpecialistFixedEventResponse(
                 event.getId(),
+                event.getSpecialist().getId(),
+                specialistDisplayName(event.getSpecialist()),
                 service.getId(),
                 service.getTitleUa(),
                 office == null ? null : office.getId(),

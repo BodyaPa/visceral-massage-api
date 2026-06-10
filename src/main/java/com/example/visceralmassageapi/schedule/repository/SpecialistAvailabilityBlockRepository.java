@@ -18,6 +18,7 @@ public interface SpecialistAvailabilityBlockRepository extends JpaRepository<Spe
             FROM SpecialistAvailabilityBlock block
             JOIN FETCH block.specialist
             LEFT JOIN FETCH block.office
+            LEFT JOIN FETCH block.service
             WHERE block.id = :id
             """)
     Optional<SpecialistAvailabilityBlock> findForBooking(long id);
@@ -25,7 +26,9 @@ public interface SpecialistAvailabilityBlockRepository extends JpaRepository<Spe
     @Query("""
             SELECT block
             FROM SpecialistAvailabilityBlock block
+            JOIN FETCH block.specialist
             LEFT JOIN FETCH block.office
+            LEFT JOIN FETCH block.service
             WHERE block.specialist.id = :specialistId
               AND block.startsAt < :to
               AND block.endsAt > :from
@@ -37,7 +40,21 @@ public interface SpecialistAvailabilityBlockRepository extends JpaRepository<Spe
             SELECT block
             FROM SpecialistAvailabilityBlock block
             JOIN FETCH block.specialist specialist
+            LEFT JOIN FETCH block.office
+            LEFT JOIN FETCH block.service
+            WHERE (:specialistId IS NULL OR specialist.id = :specialistId)
+              AND block.startsAt < :to
+              AND block.endsAt > :from
+            ORDER BY block.startsAt ASC, block.id ASC
+            """)
+    List<SpecialistAvailabilityBlock> findManagedRange(Long specialistId, OffsetDateTime from, OffsetDateTime to);
+
+    @Query("""
+            SELECT block
+            FROM SpecialistAvailabilityBlock block
+            JOIN FETCH block.specialist specialist
             LEFT JOIN FETCH block.office office
+            LEFT JOIN FETCH block.service service
             WHERE block.status = com.example.visceralmassageapi.schedule.domain.ScheduleBlockStatus.AVAILABLE
               AND block.startsAt < :to
               AND block.endsAt > :from
@@ -63,6 +80,7 @@ public interface SpecialistAvailabilityBlockRepository extends JpaRepository<Spe
             FROM SpecialistAvailabilityBlock block
             JOIN FETCH block.specialist specialist
             LEFT JOIN FETCH block.office office
+            LEFT JOIN FETCH block.service service
             WHERE block.status = com.example.visceralmassageapi.schedule.domain.ScheduleBlockStatus.AVAILABLE
               AND block.startsAt < :to
               AND block.endsAt > :from
@@ -82,6 +100,7 @@ public interface SpecialistAvailabilityBlockRepository extends JpaRepository<Spe
             FROM SpecialistAvailabilityBlock block
             JOIN FETCH block.specialist specialist
             LEFT JOIN FETCH block.office office
+            LEFT JOIN FETCH block.service service
             WHERE block.status = com.example.visceralmassageapi.schedule.domain.ScheduleBlockStatus.BLOCKED
               AND block.startsAt < :to
               AND block.endsAt > :from
@@ -154,6 +173,7 @@ public interface SpecialistAvailabilityBlockRepository extends JpaRepository<Spe
             SELECT block
             FROM SpecialistAvailabilityBlock block
             LEFT JOIN FETCH block.office office
+            LEFT JOIN FETCH block.service service
             WHERE block.specialist.id = :specialistId
               AND block.status = com.example.visceralmassageapi.schedule.domain.ScheduleBlockStatus.BLOCKED
               AND block.startsAt < :to

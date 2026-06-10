@@ -5,6 +5,8 @@ import java.time.OffsetDateTime;
 
 public record SpecialistFixedEventResponse(
         long id,
+        long specialistId,
+        String specialistName,
         long serviceId,
         String serviceTitle,
         Long officeId,

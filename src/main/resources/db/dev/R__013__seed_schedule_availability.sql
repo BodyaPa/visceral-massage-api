@@ -26,6 +26,9 @@ UPDATE specialist_availability_blocks block
 SET specialist_user_id = specialist.id,
     office_id = office.id,
     status = seed.status,
+    item_type = CASE WHEN seed.status = 'BLOCKED' THEN 'BLOCK' ELSE 'OPEN_RANGE' END,
+    service_id = NULL,
+    capacity = NULL,
     starts_at = (CURRENT_DATE + seed.day_offset + seed.starts_at) AT TIME ZONE 'Europe/Kyiv',
     ends_at = (CURRENT_DATE + seed.day_offset + seed.ends_at) AT TIME ZONE 'Europe/Kyiv',
     notes = seed.notes,
@@ -60,12 +63,13 @@ WITH seed(specialist_email, office_name, status, day_offset, starts_at, ends_at,
         ('specialist.two@dev.ataraksia.local', 'Ataraksia Podil Room', 'AVAILABLE', -5, TIME '16:00', TIME '17:00', 'Historical cancelled booking [DEV_EXTRA:S2_CANCELLED_HISTORY]', '[DEV_EXTRA:S2_CANCELLED_HISTORY]')
 )
 INSERT INTO specialist_availability_blocks (
-    specialist_user_id, office_id, status, starts_at, ends_at, notes, created_at, updated_at
+    specialist_user_id, office_id, status, item_type, starts_at, ends_at, notes, created_at, updated_at
 )
 SELECT
     specialist.id,
     office.id,
     seed.status,
+    CASE WHEN seed.status = 'BLOCKED' THEN 'BLOCK' ELSE 'OPEN_RANGE' END,
     (CURRENT_DATE + seed.day_offset + seed.starts_at) AT TIME ZONE 'Europe/Kyiv',
     (CURRENT_DATE + seed.day_offset + seed.ends_at) AT TIME ZONE 'Europe/Kyiv',
     seed.notes,

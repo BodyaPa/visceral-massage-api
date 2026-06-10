@@ -89,11 +89,10 @@ expenses and fixed events are available after startup. Remove `classpath:db/dev`
 from `application-staging.yml` before using staging as a clean pre-production
 environment.
 
-Start staging from `deploy/` using the production base file and the staging
-override:
+Start staging from `deploy/` using the standalone staging Compose file:
 
 ```bash
-docker compose -f docker-compose.prod.yml -f docker-compose.staging.yml up -d --build
+docker compose --env-file .env -f docker-compose.staging.yml up -d --build
 ```
 
 Set database, JWT and CORS values through deployment secrets as for production.

@@ -84,9 +84,10 @@ public interface BookingRepository extends JpaRepository<Booking, Long>, JpaSpec
             SELECT booking
             FROM Booking booking
             JOIN FETCH booking.user
+            JOIN FETCH booking.specialist specialist
             JOIN FETCH booking.service
             LEFT JOIN FETCH booking.office
-            WHERE booking.specialist.id = :specialistId
+            WHERE specialist.id = :specialistId
               AND booking.status <> com.example.visceralmassageapi.booking.domain.BookingStatus.CANCELLED
               AND booking.startsAt < :to
               AND booking.endsAt > :from

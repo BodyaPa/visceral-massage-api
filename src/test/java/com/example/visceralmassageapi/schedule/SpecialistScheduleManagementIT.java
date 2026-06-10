@@ -144,6 +144,101 @@ class SpecialistScheduleManagementIT extends IntegrationTestBase {
     }
 
     @Test
+    void specialistCanCreateConcreteAppointmentSlotForSpecificService() throws Exception {
+        Cookie[] specialistCookies = loginCookies(OWNER_PHONE);
+        long officeId = createOffice();
+        ServiceOffering service = createService();
+        ServiceOffering otherService = createService();
+
+        var createResult = mvc.perform(post("/api/admin/schedule/availability")
+                        .with(csrf())
+                        .cookie(specialistCookies)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {
+                                  "officeId":%s,
+                                  "status":"AVAILABLE",
+                                  "itemType":"APPOINTMENT_SLOT",
+                                  "serviceId":%s,
+                                  "capacity":1,
+                                  "startsAt":"2030-02-03T08:00:00Z",
+                                  "endsAt":"2030-02-03T09:00:00Z",
+                                  "notes":"Concrete massage slot"
+                                }
+                                """.formatted(officeId, service.getId())))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.itemType").value("APPOINTMENT_SLOT"))
+                .andExpect(jsonPath("$.serviceId").value(service.getId()))
+                .andExpect(jsonPath("$.capacity").value(1))
+                .andReturn();
+
+        long blockId = objectMapper.readTree(createResult.getResponse().getContentAsString()).path("id").asLong();
+
+        mvc.perform(get("/api/schedule/availability")
+                        .param("from", "2030-02-03T00:00:00Z")
+                        .param("to", "2030-02-04T00:00:00Z")
+                        .param("serviceId", String.valueOf(service.getId())))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$[0].id").value(blockId))
+                .andExpect(jsonPath("$[0].startsAt").value("2030-02-03T08:00:00Z"))
+                .andExpect(jsonPath("$[0].endsAt").value("2030-02-03T09:00:00Z"));
+
+        mvc.perform(get("/api/schedule/availability")
+                        .param("from", "2030-02-03T00:00:00Z")
+                        .param("to", "2030-02-04T00:00:00Z")
+                        .param("serviceId", String.valueOf(otherService.getId())))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$").isEmpty());
+    }
+
+    @Test
+    void masterSpecialistCanManageOtherSpecialistScheduleButRegularSpecialistCannot() throws Exception {
+        Cookie[] ownerCookies = loginCookies(OWNER_PHONE);
+        User otherSpecialist = createUserWithRoles(uniquePhone(), UserRole.SPECIALIST);
+        Cookie[] otherCookies = loginCookies(otherSpecialist.getPhone());
+
+        var createResult = mvc.perform(post("/api/admin/schedule/availability")
+                        .with(csrf())
+                        .cookie(ownerCookies)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {
+                                  "specialistId":%s,
+                                  "status":"AVAILABLE",
+                                  "startsAt":"2030-02-04T08:00:00Z",
+                                  "endsAt":"2030-02-04T10:00:00Z"
+                                }
+                                """.formatted(otherSpecialist.getId())))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.specialistId").value(otherSpecialist.getId()))
+                .andReturn();
+
+        long blockId = objectMapper.readTree(createResult.getResponse().getContentAsString()).path("id").asLong();
+
+        mvc.perform(get("/api/admin/schedule/availability")
+                        .cookie(ownerCookies)
+                        .param("from", "2030-02-04T00:00:00Z")
+                        .param("to", "2030-02-05T00:00:00Z")
+                        .param("specialistId", String.valueOf(otherSpecialist.getId())))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$[0].id").value(blockId));
+
+        mvc.perform(post("/api/admin/schedule/availability")
+                        .with(csrf())
+                        .cookie(otherCookies)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {
+                                  "specialistId":%s,
+                                  "status":"AVAILABLE",
+                                  "startsAt":"2030-02-04T11:00:00Z",
+                                  "endsAt":"2030-02-04T12:00:00Z"
+                                }
+                                """.formatted(userRepository.findByPhone(OWNER_PHONE).orElseThrow().getId())))
+                .andExpect(status().isForbidden());
+    }
+
+    @Test
     void specialistCanUpdateOwnAvailabilityAndOverlapValidationExcludesCurrentBlock() throws Exception {
         Cookie[] specialistCookies = loginCookies(OWNER_PHONE);
         long officeId = createOffice();
@@ -361,6 +456,78 @@ class SpecialistScheduleManagementIT extends IntegrationTestBase {
     }
 
     @Test
+    void masterSpecialistCanCopyOtherSpecialistDayPlan() throws Exception {
+        Cookie[] ownerCookies = loginCookies(OWNER_PHONE);
+        User otherSpecialist = createUserWithRoles(uniquePhone(), UserRole.SPECIALIST);
+        SpecialistAvailabilityBlock sourceBlock = createAvailabilityEntity(
+                otherSpecialist,
+                "2033-01-02T08:00:00Z",
+                "2033-01-02T09:00:00Z"
+        );
+
+        mvc.perform(post("/api/admin/schedule/day-copy")
+                        .with(csrf())
+                        .cookie(ownerCookies)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {
+                                  "specialistId":%s,
+                                  "sourceDate":"2033-01-02",
+                                  "targetDates":["2033-01-03","2033-01-04"],
+                                  "includeAvailability":true,
+                                  "includeFixedEvents":false
+                                }
+                                """.formatted(otherSpecialist.getId())))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.specialistId").value(otherSpecialist.getId()))
+                .andExpect(jsonPath("$.copiedAvailabilityCount").value(2))
+                .andExpect(jsonPath("$.copiedEventCount").value(0))
+                .andExpect(jsonPath("$.conflicts").isEmpty());
+
+        mvc.perform(get("/api/admin/schedule/availability")
+                        .cookie(ownerCookies)
+                        .param("specialistId", String.valueOf(otherSpecialist.getId()))
+                        .param("from", "2033-01-03T00:00:00Z")
+                        .param("to", "2033-01-05T00:00:00Z"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$[?(@.startsAt == '2033-01-03T08:00:00Z')]").exists())
+                .andExpect(jsonPath("$[?(@.startsAt == '2033-01-04T08:00:00Z')]").exists());
+
+        availabilityBlockRepository.delete(sourceBlock);
+    }
+
+    @Test
+    void dayPlanCopyReportsConflictsWithoutPartialCopy() throws Exception {
+        Cookie[] specialistCookies = loginCookies(OWNER_PHONE);
+        User specialist = userRepository.findByPhone(OWNER_PHONE).orElseThrow();
+        createAvailabilityEntity(specialist, "2033-02-02T08:00:00Z", "2033-02-02T09:00:00Z");
+        createAvailabilityEntity(specialist, "2033-02-03T08:30:00Z", "2033-02-03T09:30:00Z");
+
+        mvc.perform(post("/api/admin/schedule/day-copy")
+                        .with(csrf())
+                        .cookie(specialistCookies)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {
+                                  "sourceDate":"2033-02-02",
+                                  "targetDates":["2033-02-03"],
+                                  "includeAvailability":true,
+                                  "includeFixedEvents":false
+                                }
+                                """))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.copiedAvailabilityCount").value(0))
+                .andExpect(jsonPath("$.conflicts[0].targetDate").value("2033-02-03"));
+
+        mvc.perform(get("/api/admin/schedule/availability")
+                        .cookie(specialistCookies)
+                        .param("from", "2033-02-03T00:00:00Z")
+                        .param("to", "2033-02-04T00:00:00Z"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.length()").value(1));
+    }
+
+    @Test
     void specialistCannotDeleteBlockWithBookingHistory() throws Exception {
         Cookie[] specialistCookies = loginCookies(OWNER_PHONE);
         User specialist = userRepository.findByPhone(OWNER_PHONE).orElseThrow();
@@ -430,11 +597,16 @@ class SpecialistScheduleManagementIT extends IntegrationTestBase {
     }
 
     private SpecialistAvailabilityBlock createAvailabilityEntity(User specialist) {
+        return createAvailabilityEntity(specialist, "2032-01-02T08:00:00Z", "2032-01-02T09:00:00Z");
+    }
+
+    private SpecialistAvailabilityBlock createAvailabilityEntity(User specialist, String startsAt, String endsAt) {
         SpecialistAvailabilityBlock block = new SpecialistAvailabilityBlock();
         block.setSpecialist(specialist);
         block.setStatus(com.example.visceralmassageapi.schedule.domain.ScheduleBlockStatus.AVAILABLE);
-        block.setStartsAt(java.time.OffsetDateTime.parse("2032-01-02T08:00:00Z"));
-        block.setEndsAt(java.time.OffsetDateTime.parse("2032-01-02T09:00:00Z"));
+        block.setItemType(com.example.visceralmassageapi.schedule.domain.ScheduleBlockType.OPEN_RANGE);
+        block.setStartsAt(java.time.OffsetDateTime.parse(startsAt));
+        block.setEndsAt(java.time.OffsetDateTime.parse(endsAt));
         return availabilityBlockRepository.save(block);
     }
 

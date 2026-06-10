@@ -5,6 +5,8 @@ import com.example.visceralmassageapi.booking.dto.ManualBookingRequest;
 import com.example.visceralmassageapi.booking.service.BookingService;
 import com.example.visceralmassageapi.schedule.dto.SpecialistAvailabilityRequest;
 import com.example.visceralmassageapi.schedule.dto.SpecialistAvailabilityResponse;
+import com.example.visceralmassageapi.schedule.dto.DayPlanCopyRequest;
+import com.example.visceralmassageapi.schedule.dto.DayPlanCopyResponse;
 import com.example.visceralmassageapi.schedule.dto.SpecialistFixedEventEnrollmentResponse;
 import com.example.visceralmassageapi.schedule.dto.SpecialistFixedEventRequest;
 import com.example.visceralmassageapi.schedule.dto.SpecialistFixedEventResponse;
@@ -33,36 +35,40 @@ public class SpecialistScheduleController {
     public List<SpecialistAvailabilityResponse> listAvailability(
             Authentication authentication,
             @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME) OffsetDateTime from,
-            @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME) OffsetDateTime to
+            @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME) OffsetDateTime to,
+            @RequestParam(required = false) Long specialistId
     ) {
-        return specialistScheduleService.listAvailability(currentUserId(authentication), from, to);
+        return specialistScheduleService.listAvailability(currentUserId(authentication), from, to, specialistId);
     }
 
     @GetMapping("/bookings")
     public List<SpecialistBookingResponse> listBookings(
             Authentication authentication,
             @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME) OffsetDateTime from,
-            @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME) OffsetDateTime to
+            @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME) OffsetDateTime to,
+            @RequestParam(required = false) Long specialistId
     ) {
-        return bookingService.listSpecialistBookings(currentUserId(authentication), from, to);
+        return bookingService.listSpecialistBookings(currentUserId(authentication), from, to, specialistId);
     }
 
     @GetMapping("/events")
     public List<SpecialistFixedEventResponse> listEvents(
             Authentication authentication,
             @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME) OffsetDateTime from,
-            @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME) OffsetDateTime to
+            @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME) OffsetDateTime to,
+            @RequestParam(required = false) Long specialistId
     ) {
-        return fixedEventService.listOwn(currentUserId(authentication), from, to);
+        return fixedEventService.listOwn(currentUserId(authentication), from, to, specialistId);
     }
 
     @GetMapping("/events/enrollments")
     public List<SpecialistFixedEventEnrollmentResponse> listEventEnrollments(
             Authentication authentication,
             @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME) OffsetDateTime from,
-            @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME) OffsetDateTime to
+            @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME) OffsetDateTime to,
+            @RequestParam(required = false) Long specialistId
     ) {
-        return fixedEventService.listOwnEnrollments(currentUserId(authentication), from, to);
+        return fixedEventService.listOwnEnrollments(currentUserId(authentication), from, to, specialistId);
     }
 
     @PostMapping("/events")
@@ -88,6 +94,14 @@ public class SpecialistScheduleController {
             @Valid @RequestBody ManualBookingRequest request
     ) {
         return ResponseEntity.ok(bookingService.createManual(currentUserId(authentication), request));
+    }
+
+    @PostMapping("/day-copy")
+    public ResponseEntity<DayPlanCopyResponse> copyDayPlan(
+            Authentication authentication,
+            @Valid @RequestBody DayPlanCopyRequest request
+    ) {
+        return ResponseEntity.ok(specialistScheduleService.copyDayPlan(currentUserId(authentication), request));
     }
 
     @PostMapping("/availability")

@@ -6,6 +6,7 @@ import jakarta.validation.constraints.NotNull;
 import java.time.OffsetDateTime;
 
 public record ManualBookingRequest(
+        Long specialistId,
         @NotBlank String clientIdentifier,
         @NotNull Long availabilityBlockId,
         @NotNull Long serviceId,

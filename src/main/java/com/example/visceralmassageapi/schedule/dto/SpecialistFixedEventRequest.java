@@ -7,6 +7,7 @@ import jakarta.validation.constraints.Size;
 import java.time.OffsetDateTime;
 
 public record SpecialistFixedEventRequest(
+        Long specialistId,
         @NotNull Long serviceId,
         Long officeId,
         @NotNull OffsetDateTime startsAt,

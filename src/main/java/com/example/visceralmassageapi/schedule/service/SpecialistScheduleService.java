@@ -10,10 +10,13 @@ import com.example.visceralmassageapi.common.exception.NotFoundException;
 import com.example.visceralmassageapi.offices.entity.Office;
 import com.example.visceralmassageapi.offices.repository.OfficeRepository;
 import com.example.visceralmassageapi.schedule.domain.FixedEvent;
+import com.example.visceralmassageapi.schedule.domain.ScheduleBlockType;
 import com.example.visceralmassageapi.schedule.domain.ScheduleBlockStatus;
 import com.example.visceralmassageapi.schedule.domain.SpecialistAvailabilityBlock;
 import com.example.visceralmassageapi.schedule.dto.PublicScheduleAvailabilityResponse;
 import com.example.visceralmassageapi.schedule.dto.PublicScheduleUnavailableResponse;
+import com.example.visceralmassageapi.schedule.dto.DayPlanCopyRequest;
+import com.example.visceralmassageapi.schedule.dto.DayPlanCopyResponse;
 import com.example.visceralmassageapi.schedule.dto.SpecialistAvailabilityRequest;
 import com.example.visceralmassageapi.schedule.dto.SpecialistAvailabilityResponse;
 import com.example.visceralmassageapi.schedule.repository.FixedEventRepository;
@@ -27,8 +30,12 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.time.OffsetDateTime;
+import java.time.LocalDate;
+import java.time.ZoneOffset;
+import java.time.Duration;
 import java.time.temporal.ChronoUnit;
 import java.util.ArrayList;
+import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Set;
 
@@ -47,11 +54,19 @@ public class SpecialistScheduleService {
 
     @Transactional(readOnly = true)
     public List<SpecialistAvailabilityResponse> listAvailability(long specialistId, OffsetDateTime from, OffsetDateTime to) {
+        return listAvailability(specialistId, from, to, null);
+    }
+
+    @Transactional(readOnly = true)
+    public List<SpecialistAvailabilityResponse> listAvailability(long actorId, OffsetDateTime from, OffsetDateTime to, Long requestedSpecialistId) {
         validateQueryRange(from, to);
+        Long managedSpecialistId = resolveManagedSpecialistId(actorId, requestedSpecialistId);
 
-        Set<Long> bookedBlockIds = Set.copyOf(bookingRepository.findBookedAvailabilityBlockIds(specialistId, from, to));
+        Set<Long> bookedBlockIds = managedSpecialistId == null
+                ? Set.of()
+                : Set.copyOf(bookingRepository.findBookedAvailabilityBlockIds(managedSpecialistId, from, to));
 
-        return availabilityBlockRepository.findOwnRange(specialistId, from, to)
+        return availabilityBlockRepository.findManagedRange(managedSpecialistId, from, to)
                 .stream()
                 .map(block -> toResponse(block, bookedBlockIds.contains(block.getId())))
                 .toList();
@@ -81,6 +96,7 @@ public class SpecialistScheduleService {
 
             return availabilityBlockRepository.findPublicAvailabilityBlocks(from, to, officeId, specialistId)
                     .stream()
+                    .filter(block -> isCompatibleWithService(block, service))
                     .flatMap(block -> toPublicServiceSlots(block, service, from, to).stream())
                     .toList();
         }
@@ -122,9 +138,14 @@ public class SpecialistScheduleService {
     }
 
     @Transactional
-    public SpecialistAvailabilityResponse createAvailability(long specialistId, SpecialistAvailabilityRequest request) {
+    public SpecialistAvailabilityResponse createAvailability(long actorId, SpecialistAvailabilityRequest request) {
+        long specialistId = resolveManagedSpecialistId(actorId, request.specialistId());
         User specialist = requireSpecialist(specialistId);
         validateBlockRange(request.startsAt(), request.endsAt());
+        ScheduleBlockType itemType = resolveItemType(request);
+        ServiceOffering service = resolveSlotService(request, itemType);
+        Integer capacity = resolveCapacity(request, itemType);
+        validateItemRange(request, itemType, service);
 
         if (availabilityBlockRepository.overlapsStatus(specialistId, request.status(), null, request.startsAt(), request.endsAt())) {
             throw new BadRequestException("Schedule block overlaps an existing block");
@@ -138,6 +159,9 @@ public class SpecialistScheduleService {
         block.setSpecialist(specialist);
         block.setOffice(resolveOffice(request.officeId()));
         block.setStatus(request.status());
+        block.setItemType(itemType);
+        block.setService(service);
+        block.setCapacity(capacity);
         block.setStartsAt(request.startsAt());
         block.setEndsAt(request.endsAt());
         block.setNotes(normalizeNotes(request.notes()));
@@ -146,19 +170,24 @@ public class SpecialistScheduleService {
     }
 
     @Transactional
-    public SpecialistAvailabilityResponse updateAvailability(long specialistId, long blockId, SpecialistAvailabilityRequest request) {
-        requireSpecialist(specialistId);
+    public SpecialistAvailabilityResponse updateAvailability(long actorId, long blockId, SpecialistAvailabilityRequest request) {
         validateBlockRange(request.startsAt(), request.endsAt());
+        ScheduleBlockType itemType = resolveItemType(request);
+        ServiceOffering service = resolveSlotService(request, itemType);
+        Integer capacity = resolveCapacity(request, itemType);
+        validateItemRange(request, itemType, service);
 
         SpecialistAvailabilityBlock block = availabilityBlockRepository.findById(blockId)
                 .orElseThrow(() -> new NotFoundException("Schedule block not found"));
 
-        if (!block.getSpecialist().getId().equals(specialistId)) {
-            throw new NotFoundException("Schedule block not found");
-        }
+        ensureCanManageBlock(actorId, block);
+        long specialistId = block.getSpecialist().getId();
 
         boolean hasBookingHistory = bookingRepository.existsByAvailabilityBlockId(blockId);
         boolean changesBookableRange = block.getStatus() != request.status()
+                || block.getItemType() != itemType
+                || !sameService(block.getService(), service)
+                || !sameCapacity(block.getCapacity(), capacity)
                 || !block.getStartsAt().isEqual(request.startsAt())
                 || !block.getEndsAt().isEqual(request.endsAt())
                 || !sameOffice(block.getOffice(), request.officeId());
@@ -177,6 +206,9 @@ public class SpecialistScheduleService {
 
         block.setOffice(resolveOffice(request.officeId()));
         block.setStatus(request.status());
+        block.setItemType(itemType);
+        block.setService(service);
+        block.setCapacity(capacity);
         block.setStartsAt(request.startsAt());
         block.setEndsAt(request.endsAt());
         block.setNotes(normalizeNotes(request.notes()));
@@ -199,19 +231,168 @@ public class SpecialistScheduleService {
     }
 
     @Transactional
-    public void deleteAvailability(long specialistId, long blockId) {
+    public void deleteAvailability(long actorId, long blockId) {
         SpecialistAvailabilityBlock block = availabilityBlockRepository.findById(blockId)
                 .orElseThrow(() -> new NotFoundException("Schedule block not found"));
 
-        if (!block.getSpecialist().getId().equals(specialistId)) {
-            throw new NotFoundException("Schedule block not found");
-        }
+        ensureCanManageBlock(actorId, block);
 
         if (bookingRepository.existsByAvailabilityBlockId(blockId)) {
             throw new BadRequestException("Schedule block with booking history cannot be deleted");
         }
 
         availabilityBlockRepository.delete(block);
+    }
+
+    @Transactional
+    public DayPlanCopyResponse copyDayPlan(long actorId, DayPlanCopyRequest request) {
+        long specialistId = resolveManagedSpecialistId(actorId, request.specialistId());
+        validateCopyRequest(request);
+        OffsetDateTime sourceStart = request.sourceDate().atStartOfDay().atOffset(ZoneOffset.UTC);
+        OffsetDateTime sourceEnd = sourceStart.plusDays(1);
+        List<LocalDate> targetDates = new ArrayList<>(new LinkedHashSet<>(request.targetDates()));
+        boolean includeAvailability = request.includeAvailability();
+        boolean includeFixedEvents = request.includeFixedEvents();
+
+        if (!includeAvailability && !includeFixedEvents) {
+            includeAvailability = true;
+            includeFixedEvents = true;
+        }
+
+        List<SpecialistAvailabilityBlock> sourceBlocks = includeAvailability
+                ? availabilityBlockRepository.findManagedRange(specialistId, sourceStart, sourceEnd)
+                : List.of();
+        List<FixedEvent> sourceEvents = includeFixedEvents
+                ? fixedEventRepository.findManagedRange(specialistId, sourceStart, sourceEnd)
+                : List.of();
+        List<DayPlanCopyResponse.Conflict> conflicts = findCopyConflicts(specialistId, targetDates, sourceBlocks, sourceEvents);
+
+        if (!conflicts.isEmpty()) {
+            return new DayPlanCopyResponse(specialistId, request.sourceDate(), targetDates, 0, 0, conflicts);
+        }
+
+        int copiedBlocks = 0;
+        int copiedEvents = 0;
+        for (LocalDate targetDate : targetDates) {
+            for (SpecialistAvailabilityBlock sourceBlock : sourceBlocks) {
+                availabilityBlockRepository.save(copyBlock(sourceBlock, targetDate));
+                copiedBlocks++;
+            }
+            for (FixedEvent sourceEvent : sourceEvents) {
+                fixedEventRepository.save(copyEvent(sourceEvent, targetDate));
+                copiedEvents++;
+            }
+        }
+
+        return new DayPlanCopyResponse(specialistId, request.sourceDate(), targetDates, copiedBlocks, copiedEvents, List.of());
+    }
+
+    private void validateCopyRequest(DayPlanCopyRequest request) {
+        if (request.sourceDate() == null || request.targetDates() == null || request.targetDates().isEmpty()) {
+            throw new BadRequestException("Source date and target dates are required");
+        }
+        if (request.targetDates().size() > 31) {
+            throw new BadRequestException("Too many target dates");
+        }
+        if (request.targetDates().contains(request.sourceDate())) {
+            throw new BadRequestException("Target dates must not include the source date");
+        }
+    }
+
+    private List<DayPlanCopyResponse.Conflict> findCopyConflicts(
+            long specialistId,
+            List<LocalDate> targetDates,
+            List<SpecialistAvailabilityBlock> sourceBlocks,
+            List<FixedEvent> sourceEvents
+    ) {
+        List<DayPlanCopyResponse.Conflict> conflicts = new ArrayList<>();
+        for (LocalDate targetDate : targetDates) {
+            for (SpecialistAvailabilityBlock sourceBlock : sourceBlocks) {
+                OffsetDateTime startsAt = moveToDate(sourceBlock.getStartsAt(), targetDate);
+                OffsetDateTime endsAt = startsAt.plus(Duration.between(sourceBlock.getStartsAt(), sourceBlock.getEndsAt()));
+                String reason = findScheduleConflictReason(specialistId, startsAt, endsAt);
+                if (reason != null) {
+                    conflicts.add(new DayPlanCopyResponse.Conflict(targetDate, "availability", startsAt, endsAt, reason));
+                }
+            }
+            for (FixedEvent sourceEvent : sourceEvents) {
+                OffsetDateTime startsAt = moveToDate(sourceEvent.getStartsAt(), targetDate);
+                OffsetDateTime endsAt = startsAt.plus(Duration.between(sourceEvent.getStartsAt(), sourceEvent.getEndsAt()));
+                String reason = findScheduleConflictReason(specialistId, startsAt, endsAt);
+                if (reason != null) {
+                    conflicts.add(new DayPlanCopyResponse.Conflict(targetDate, "fixed_event", startsAt, endsAt, reason));
+                }
+            }
+        }
+        return conflicts;
+    }
+
+    private String findScheduleConflictReason(long specialistId, OffsetDateTime startsAt, OffsetDateTime endsAt) {
+        if (availabilityBlockRepository.overlaps(specialistId, null, startsAt, endsAt)) {
+            return "overlaps existing schedule item";
+        }
+        if (bookingRepository.existsActiveOverlappingSpecialistBooking(specialistId, startsAt, endsAt)) {
+            return "overlaps existing booking";
+        }
+        if (fixedEventRepository.overlapsActiveForSpecialist(specialistId, null, startsAt, endsAt)) {
+            return "overlaps existing event";
+        }
+        return null;
+    }
+
+    private SpecialistAvailabilityBlock copyBlock(SpecialistAvailabilityBlock source, LocalDate targetDate) {
+        OffsetDateTime startsAt = moveToDate(source.getStartsAt(), targetDate);
+        SpecialistAvailabilityBlock copy = new SpecialistAvailabilityBlock();
+        copy.setSpecialist(source.getSpecialist());
+        copy.setOffice(source.getOffice());
+        copy.setStatus(source.getStatus());
+        copy.setItemType(source.getItemType());
+        copy.setService(source.getService());
+        copy.setCapacity(source.getCapacity());
+        copy.setStartsAt(startsAt);
+        copy.setEndsAt(startsAt.plus(Duration.between(source.getStartsAt(), source.getEndsAt())));
+        copy.setNotes(source.getNotes());
+        return copy;
+    }
+
+    private FixedEvent copyEvent(FixedEvent source, LocalDate targetDate) {
+        OffsetDateTime startsAt = moveToDate(source.getStartsAt(), targetDate);
+        FixedEvent copy = new FixedEvent();
+        copy.setSpecialist(source.getSpecialist());
+        copy.setService(source.getService());
+        copy.setOffice(source.getOffice());
+        copy.setStartsAt(startsAt);
+        copy.setEndsAt(startsAt.plus(Duration.between(source.getStartsAt(), source.getEndsAt())));
+        copy.setCapacity(source.getCapacity());
+        copy.setNote(source.getNote());
+        copy.setActive(source.isActive());
+        return copy;
+    }
+
+    private OffsetDateTime moveToDate(OffsetDateTime value, LocalDate targetDate) {
+        return OffsetDateTime.of(targetDate, value.toLocalTime(), value.getOffset());
+    }
+
+    private Long resolveManagedSpecialistId(long actorId, Long requestedSpecialistId) {
+        User actor = requireSpecialist(actorId);
+        if (requestedSpecialistId == null || requestedSpecialistId.equals(actorId)) {
+            return requestedSpecialistId == null ? actorId : requestedSpecialistId;
+        }
+        if (!actor.getRoles().contains(UserRole.MASTER)) {
+            throw new AccessDeniedException("MASTER role is required to manage another specialist schedule");
+        }
+        requireSpecialist(requestedSpecialistId);
+        return requestedSpecialistId;
+    }
+
+    private void ensureCanManageBlock(long actorId, SpecialistAvailabilityBlock block) {
+        User actor = requireSpecialist(actorId);
+        if (block.getSpecialist().getId().equals(actorId)) {
+            return;
+        }
+        if (!actor.getRoles().contains(UserRole.MASTER)) {
+            throw new AccessDeniedException("MASTER role is required to manage another specialist schedule");
+        }
     }
 
     private User requireSpecialist(long specialistId) {
@@ -238,6 +419,64 @@ public class SpecialistScheduleService {
         }
 
         return office;
+    }
+
+    private ScheduleBlockType resolveItemType(SpecialistAvailabilityRequest request) {
+        if (request.status() == ScheduleBlockStatus.BLOCKED) {
+            return ScheduleBlockType.BLOCK;
+        }
+        if (request.itemType() != null) {
+            if (request.itemType() == ScheduleBlockType.BLOCK) {
+                throw new BadRequestException("Blocked item type requires BLOCKED status");
+            }
+            return request.itemType();
+        }
+        return request.serviceId() == null ? ScheduleBlockType.OPEN_RANGE : ScheduleBlockType.APPOINTMENT_SLOT;
+    }
+
+    private ServiceOffering resolveSlotService(SpecialistAvailabilityRequest request, ScheduleBlockType itemType) {
+        if (itemType != ScheduleBlockType.APPOINTMENT_SLOT) {
+            if (request.serviceId() != null) {
+                throw new BadRequestException("Service is allowed only for appointment slots");
+            }
+            return null;
+        }
+
+        if (request.serviceId() == null) {
+            throw new BadRequestException("Appointment slot service is required");
+        }
+
+        ServiceOffering service = serviceOfferingRepository.findById(request.serviceId())
+                .orElseThrow(() -> new NotFoundException("Service not found"));
+        if (!service.isActive()) {
+            throw new BadRequestException("Service is inactive");
+        }
+        if (service.getBookingMode() != ServiceBookingMode.INDIVIDUAL_APPOINTMENT) {
+            throw new BadRequestException("Appointment slots require an individual appointment service");
+        }
+        return service;
+    }
+
+    private Integer resolveCapacity(SpecialistAvailabilityRequest request, ScheduleBlockType itemType) {
+        if (itemType != ScheduleBlockType.APPOINTMENT_SLOT) {
+            if (request.capacity() != null) {
+                throw new BadRequestException("Capacity is allowed only for appointment slots");
+            }
+            return null;
+        }
+        return request.capacity() == null ? 1 : request.capacity();
+    }
+
+    private void validateItemRange(SpecialistAvailabilityRequest request, ScheduleBlockType itemType, ServiceOffering service) {
+        if (request.status() == ScheduleBlockStatus.BLOCKED && itemType != ScheduleBlockType.BLOCK) {
+            throw new BadRequestException("Blocked schedule items must use BLOCK type");
+        }
+        if (itemType == ScheduleBlockType.APPOINTMENT_SLOT) {
+            OffsetDateTime expectedEndsAt = request.startsAt().plusMinutes(service.getDurationMinutes());
+            if (!expectedEndsAt.isEqual(request.endsAt())) {
+                throw new BadRequestException("Appointment slot duration must match the selected service");
+            }
+        }
     }
 
     private void validateQueryRange(OffsetDateTime from, OffsetDateTime to) {
@@ -271,14 +510,32 @@ public class SpecialistScheduleService {
         return currentOfficeId == null ? officeId == null : currentOfficeId.equals(officeId);
     }
 
+    private boolean sameService(ServiceOffering current, ServiceOffering next) {
+        Long currentId = current == null ? null : current.getId();
+        Long nextId = next == null ? null : next.getId();
+        return currentId == null ? nextId == null : currentId.equals(nextId);
+    }
+
+    private boolean sameCapacity(Integer current, Integer next) {
+        return current == null ? next == null : current.equals(next);
+    }
+
     private SpecialistAvailabilityResponse toResponse(SpecialistAvailabilityBlock block, boolean booked) {
         Office office = block.getOffice();
+        User specialist = block.getSpecialist();
+        ServiceOffering service = block.getService();
 
         return new SpecialistAvailabilityResponse(
                 block.getId(),
+                specialist.getId(),
+                specialistDisplayName(specialist),
                 office == null ? null : office.getId(),
                 office == null ? null : office.getName(),
                 block.getStatus(),
+                block.getItemType(),
+                service == null ? null : service.getId(),
+                service == null ? null : service.getTitleUa(),
+                block.getCapacity(),
                 booked,
                 block.getStartsAt(),
                 block.getEndsAt(),
@@ -358,6 +615,10 @@ public class SpecialistScheduleService {
             OffsetDateTime from,
             OffsetDateTime to
     ) {
+        if (block.getItemType() == ScheduleBlockType.APPOINTMENT_SLOT && !isCompatibleWithService(block, service)) {
+            return List.of();
+        }
+
         int durationMinutes = service.getDurationMinutes();
         OffsetDateTime blockStartsAt = max(block.getStartsAt(), from);
         OffsetDateTime blockEndsAt = min(block.getEndsAt(), to);
@@ -382,6 +643,11 @@ public class SpecialistScheduleService {
         }
 
         return slots;
+    }
+
+    private boolean isCompatibleWithService(SpecialistAvailabilityBlock block, ServiceOffering service) {
+        ServiceOffering blockService = block.getService();
+        return blockService == null || blockService.getId().equals(service.getId());
     }
 
     private List<PublicScheduleAvailabilityResponse> toPublicOpenRanges(

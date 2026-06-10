@@ -44,6 +44,7 @@ public interface FixedEventRepository extends JpaRepository<FixedEvent, Long> {
             SELECT event
             FROM FixedEvent event
             JOIN FETCH event.service
+            JOIN FETCH event.specialist
             LEFT JOIN FETCH event.office
             WHERE event.specialist.id = :specialistId
               AND event.startsAt < :to
@@ -51,6 +52,19 @@ public interface FixedEventRepository extends JpaRepository<FixedEvent, Long> {
             ORDER BY event.startsAt ASC, event.id ASC
             """)
     List<FixedEvent> findOwnRange(long specialistId, OffsetDateTime from, OffsetDateTime to);
+
+    @Query("""
+            SELECT event
+            FROM FixedEvent event
+            JOIN FETCH event.service
+            JOIN FETCH event.specialist specialist
+            LEFT JOIN FETCH event.office
+            WHERE specialist.id = :specialistId
+              AND event.startsAt < :to
+              AND event.endsAt > :from
+            ORDER BY event.startsAt ASC, event.id ASC
+            """)
+    List<FixedEvent> findManagedRange(long specialistId, OffsetDateTime from, OffsetDateTime to);
 
     @Query("""
             SELECT event

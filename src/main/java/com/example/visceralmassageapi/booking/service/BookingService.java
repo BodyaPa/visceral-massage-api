@@ -1,6 +1,7 @@
 package com.example.visceralmassageapi.booking.service;
 
 import com.example.visceralmassageapi.auth.domain.User;
+import com.example.visceralmassageapi.auth.domain.UserRole;
 import com.example.visceralmassageapi.auth.repo.UserRepository;
 import com.example.visceralmassageapi.booking.domain.Booking;
 import com.example.visceralmassageapi.booking.domain.BookingStatus;
@@ -14,6 +15,7 @@ import com.example.visceralmassageapi.common.audit.AuditLogger;
 import com.example.visceralmassageapi.common.exception.BadRequestException;
 import com.example.visceralmassageapi.common.exception.NotFoundException;
 import com.example.visceralmassageapi.offices.entity.Office;
+import com.example.visceralmassageapi.schedule.domain.ScheduleBlockType;
 import com.example.visceralmassageapi.schedule.domain.ScheduleBlockStatus;
 import com.example.visceralmassageapi.schedule.domain.SpecialistAvailabilityBlock;
 import com.example.visceralmassageapi.schedule.repository.FixedEventRepository;
@@ -24,6 +26,7 @@ import com.example.visceralmassageapi.services.repository.ServiceOfferingReposit
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
+import org.springframework.security.access.AccessDeniedException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -62,7 +65,8 @@ public class BookingService {
     }
 
     @Transactional
-    public SpecialistBookingResponse createManual(long specialistId, ManualBookingRequest request) {
+    public SpecialistBookingResponse createManual(long actorId, ManualBookingRequest request) {
+        Long allowedSpecialistId = resolveManagedSpecialistId(actorId, request.specialistId());
         User client = findActiveClient(request.clientIdentifier());
         Booking booking = createBooking(
                 client,
@@ -70,7 +74,7 @@ public class BookingService {
                 request.serviceId(),
                 request.startsAt(),
                 request.reminderOptIn(),
-                specialistId
+                allowedSpecialistId
         );
         return toSpecialistResponse(booking);
     }
@@ -104,11 +108,18 @@ public class BookingService {
             throw new BadRequestException("Availability block is not available");
         }
 
+        if (block.getItemType() == ScheduleBlockType.APPOINTMENT_SLOT
+                && (block.getService() == null || !block.getService().getId().equals(service.getId()))) {
+            throw new BadRequestException("Appointment slot is assigned to another service");
+        }
+
         if (block.getOffice() != null && !block.getOffice().isActive()) {
             throw new BadRequestException("Availability block office is inactive");
         }
 
-        OffsetDateTime bookingStartsAt = requestedStartsAt == null ? block.getStartsAt() : requestedStartsAt;
+        OffsetDateTime bookingStartsAt = block.getItemType() == ScheduleBlockType.APPOINTMENT_SLOT
+                ? block.getStartsAt()
+                : requestedStartsAt == null ? block.getStartsAt() : requestedStartsAt;
         OffsetDateTime bookingEndsAt = bookingStartsAt.plusMinutes(service.getDurationMinutes());
 
         if (bookingStartsAt.isBefore(block.getStartsAt()) || bookingEndsAt.isAfter(block.getEndsAt())) {
@@ -117,6 +128,12 @@ public class BookingService {
 
         if (!bookingStartsAt.isAfter(OffsetDateTime.now())) {
             throw new BadRequestException("Selected booking slot has already started");
+        }
+
+        if (block.getItemType() == ScheduleBlockType.APPOINTMENT_SLOT
+                && bookingRepository.countByAvailabilityBlockIdAndStatusNot(block.getId(), BookingStatus.CANCELLED) >= block.getCapacity()) {
+            auditLogger.bookingConflict(block.getId(), requiredSpecialistId == null ? client.getId() : requiredSpecialistId);
+            throw new BadRequestException("Selected booking slot is already booked");
         }
 
         if (bookingRepository.existsActiveOverlappingBooking(block.getId(), bookingStartsAt, bookingEndsAt)) {
@@ -200,11 +217,13 @@ public class BookingService {
 
     @Transactional(readOnly = true)
     public List<SpecialistBookingResponse> listSpecialistBookings(
-            long specialistId,
+            long actorId,
             OffsetDateTime from,
-            OffsetDateTime to
+            OffsetDateTime to,
+            Long requestedSpecialistId
     ) {
         validateSpecialistRange(from, to);
+        long specialistId = resolveManagedSpecialistId(actorId, requestedSpecialistId);
         return bookingRepository.findSpecialistBookings(specialistId, from, to)
                 .stream()
                 .map(this::toSpecialistResponse)
@@ -285,6 +304,8 @@ public class BookingService {
                 client.getId(),
                 displayName(client),
                 client.getPhone() != null ? client.getPhone() : client.getEmail(),
+                booking.getSpecialist().getId(),
+                displayName(booking.getSpecialist()),
                 service.getId(),
                 service.getTitleUa(),
                 office == null ? null : office.getId(),
@@ -293,6 +314,26 @@ public class BookingService {
                 booking.getEndsAt(),
                 booking.isReminderOptIn()
         );
+    }
+
+    private long resolveManagedSpecialistId(long actorId, Long requestedSpecialistId) {
+        User actor = userRepository.findById(actorId)
+                .orElseThrow(() -> new NotFoundException("Specialist not found"));
+        if (!actor.getRoles().contains(UserRole.SPECIALIST)) {
+            throw new AccessDeniedException("Specialist role is required");
+        }
+        if (requestedSpecialistId == null || requestedSpecialistId.equals(actorId)) {
+            return requestedSpecialistId == null ? actorId : requestedSpecialistId;
+        }
+        if (!actor.getRoles().contains(UserRole.MASTER)) {
+            throw new AccessDeniedException("MASTER role is required to manage another specialist schedule");
+        }
+        User specialist = userRepository.findById(requestedSpecialistId)
+                .orElseThrow(() -> new NotFoundException("Specialist not found"));
+        if (!specialist.getRoles().contains(UserRole.SPECIALIST)) {
+            throw new AccessDeniedException("Specialist role is required");
+        }
+        return requestedSpecialistId;
     }
 
     private void validateSpecialistRange(OffsetDateTime from, OffsetDateTime to) {

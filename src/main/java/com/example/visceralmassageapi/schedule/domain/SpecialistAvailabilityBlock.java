@@ -2,6 +2,7 @@ package com.example.visceralmassageapi.schedule.domain;
 
 import com.example.visceralmassageapi.auth.domain.User;
 import com.example.visceralmassageapi.offices.entity.Office;
+import com.example.visceralmassageapi.services.entity.ServiceOffering;
 import jakarta.persistence.*;
 import lombok.Getter;
 import lombok.Setter;
@@ -29,6 +30,17 @@ public class SpecialistAvailabilityBlock {
     @Enumerated(EnumType.STRING)
     @Column(nullable = false, length = 24)
     private ScheduleBlockStatus status;
+
+    @Enumerated(EnumType.STRING)
+    @Column(name = "item_type", nullable = false, length = 32)
+    private ScheduleBlockType itemType = ScheduleBlockType.OPEN_RANGE;
+
+    @ManyToOne
+    @JoinColumn(name = "service_id")
+    private ServiceOffering service;
+
+    @Column
+    private Integer capacity;
 
     @Column(name = "starts_at", nullable = false)
     private OffsetDateTime startsAt;

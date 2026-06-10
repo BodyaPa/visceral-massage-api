@@ -10,6 +10,8 @@ public record SpecialistBookingResponse(
         long clientId,
         String clientName,
         String clientContact,
+        long specialistId,
+        String specialistName,
         long serviceId,
         String serviceTitleUa,
         Long officeId,
