@@ -14,6 +14,8 @@ import com.example.visceralmassageapi.booking.repository.BookingRepository;
 import com.example.visceralmassageapi.common.audit.AuditLogger;
 import com.example.visceralmassageapi.common.exception.BadRequestException;
 import com.example.visceralmassageapi.common.exception.NotFoundException;
+import com.example.visceralmassageapi.finance.repository.SpecialistFinanceSettingsRepository;
+import com.example.visceralmassageapi.finance.service.FinanceShareCalculator;
 import com.example.visceralmassageapi.offices.entity.Office;
 import com.example.visceralmassageapi.schedule.domain.ScheduleBlockType;
 import com.example.visceralmassageapi.schedule.domain.ScheduleBlockStatus;
@@ -30,6 +32,7 @@ import org.springframework.security.access.AccessDeniedException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.math.BigDecimal;
 import java.time.OffsetDateTime;
 import java.time.temporal.ChronoUnit;
 import java.util.List;
@@ -49,6 +52,7 @@ public class BookingService {
     private final ServiceOfferingRepository serviceOfferingRepository;
     private final AuditLogger auditLogger;
     private final FixedEventRepository fixedEventRepository;
+    private final SpecialistFinanceSettingsRepository specialistFinanceSettingsRepository;
 
     @Transactional
     public BookingResponse create(long userId, BookingRequest request) {
@@ -270,6 +274,11 @@ public class BookingService {
         ServiceOffering service = booking.getService();
         User client = booking.getUser();
         User specialist = booking.getSpecialist();
+        BigDecimal specialistSharePercent = specialistFinanceSettingsRepository.findById(specialist.getId())
+                .map(settings -> settings.getSpecialistSharePercent())
+                .orElse(BigDecimal.ZERO);
+        BigDecimal specialistShare = FinanceShareCalculator.specialistShare(booking.getBookedPrice(), specialistSharePercent);
+        BigDecimal businessShare = FinanceShareCalculator.businessShare(booking.getBookedPrice(), specialistShare);
 
         return new FinanceBookingResponse(
                 booking.getId(),
@@ -281,6 +290,9 @@ public class BookingService {
                 service.getTitleUa(),
                 service.getExternalPaymentUrl(),
                 booking.getBookedPrice(),
+                specialistSharePercent,
+                specialistShare,
+                businessShare,
                 specialist.getId(),
                 displayName(specialist),
                 office == null ? null : office.getId(),

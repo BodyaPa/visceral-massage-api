@@ -204,6 +204,91 @@ class BookingFlowIT extends IntegrationTestBase {
     }
 
     @Test
+    void concreteAppointmentSlotIsBookableOnlyForAssignedServiceAndIsConsumedAfterBooking() throws Exception {
+        Cookie[] specialistCookies = loginCookies(OWNER_PHONE);
+        Cookie[] userCookies = loginCookies(createUser());
+        long officeId = createOffice();
+        long serviceId = createService(true);
+        long otherServiceId = createService(true);
+
+        var slotResult = mvc.perform(post("/api/admin/schedule/availability")
+                        .with(csrf())
+                        .cookie(specialistCookies)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {
+                                  "officeId":%s,
+                                  "status":"AVAILABLE",
+                                  "itemType":"APPOINTMENT_SLOT",
+                                  "serviceId":%s,
+                                  "capacity":1,
+                                  "startsAt":"2031-08-02T08:00:00Z",
+                                  "endsAt":"2031-08-02T09:00:00Z"
+                                }
+                                """.formatted(officeId, serviceId)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.itemType").value("APPOINTMENT_SLOT"))
+                .andExpect(jsonPath("$.serviceId").value(serviceId))
+                .andReturn();
+
+        long slotId = objectMapper.readTree(slotResult.getResponse().getContentAsString()).path("id").asLong();
+
+        mvc.perform(get("/api/schedule/availability")
+                        .param("from", "2031-08-02T00:00:00Z")
+                        .param("to", "2031-08-03T00:00:00Z")
+                        .param("officeId", String.valueOf(officeId))
+                        .param("serviceId", String.valueOf(serviceId)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$[0].id").value(slotId))
+                .andExpect(jsonPath("$[0].startsAt").value("2031-08-02T08:00:00Z"))
+                .andExpect(jsonPath("$[0].endsAt").value("2031-08-02T09:00:00Z"))
+                .andExpect(jsonPath("$[1]").doesNotExist());
+
+        mvc.perform(get("/api/schedule/availability")
+                        .param("from", "2031-08-02T00:00:00Z")
+                        .param("to", "2031-08-03T00:00:00Z")
+                        .param("officeId", String.valueOf(officeId))
+                        .param("serviceId", String.valueOf(otherServiceId)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$").isEmpty());
+
+        mvc.perform(post("/api/bookings")
+                        .with(csrf())
+                        .cookie(userCookies)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {
+                                  "availabilityBlockId":%s,
+                                  "serviceId":%s,
+                                  "startsAt":"2031-08-02T08:30:00Z",
+                                  "reminderOptIn":true
+                                }
+                                """.formatted(slotId, serviceId)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.startsAt").value("2031-08-02T08:00:00Z"))
+                .andExpect(jsonPath("$.endsAt").value("2031-08-02T09:00:00Z"))
+                .andExpect(jsonPath("$.reminderOptIn").value(true));
+
+        mvc.perform(get("/api/schedule/availability")
+                        .param("from", "2031-08-02T00:00:00Z")
+                        .param("to", "2031-08-03T00:00:00Z")
+                        .param("officeId", String.valueOf(officeId))
+                        .param("serviceId", String.valueOf(serviceId)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$").isEmpty());
+
+        mvc.perform(get("/api/admin/schedule/availability")
+                        .cookie(specialistCookies)
+                        .param("from", "2031-08-02T00:00:00Z")
+                        .param("to", "2031-08-03T00:00:00Z"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$[?(@.id == %s)].booked".formatted(slotId)).value(true));
+
+        deactivateService(serviceId);
+        deactivateService(otherServiceId);
+    }
+
+    @Test
     void userCanBookFutureSlotInsideAlreadyStartedAvailabilityWindow() throws Exception {
         Cookie[] specialistCookies = loginCookies(OWNER_PHONE);
         Cookie[] userCookies = loginCookies(createUser());
@@ -360,23 +445,81 @@ class BookingFlowIT extends IntegrationTestBase {
         Cookie[] userCookies = loginCookies(createUser());
         long officeId = createOffice();
         long serviceId = createService(true);
-        long blockId = createAvailability(specialistCookies, officeId);
+        long blockId = createAvailabilityWithRange(
+                specialistCookies,
+                officeId,
+                "2035-05-10T08:00:00Z",
+                "2035-05-10T10:00:00Z"
+        );
         long bookingId = createBooking(userCookies, blockId, serviceId);
         long otherOfficeId = createOffice();
+        User specialist = userRepository.findByPhone(OWNER_PHONE).orElseThrow();
         ServiceOffering service = serviceOfferingRepository.findById(serviceId).orElseThrow();
         service.setBasePrice(BigDecimal.valueOf(9999));
         serviceOfferingRepository.save(service);
+
+        mvc.perform(put("/api/admin/finance/specialists/{specialistId}/settings", specialist.getId())
+                        .with(csrf())
+                        .cookie(specialistCookies)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {"specialistSharePercent":25.00}
+                                """))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.specialistId").value(specialist.getId()))
+                .andExpect(jsonPath("$.specialistSharePercent").value(25.0));
+
+        mvc.perform(get("/api/admin/finance/specialists")
+                        .cookie(specialistCookies))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$[?(@.specialistId == %s)]".formatted(specialist.getId())).exists())
+                .andExpect(jsonPath("$[?(@.specialistId == %s)].specialistSharePercent".formatted(specialist.getId())).value(25.0));
+
+        mvc.perform(put("/api/admin/finance/settings")
+                        .with(csrf())
+                        .cookie(specialistCookies)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {"quarterlyTaxPercent":5.00}
+                                """))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.quarterlyTaxPercent").value(5.0));
+
+        mvc.perform(get("/api/admin/finance/settings")
+                        .cookie(userCookies))
+                .andExpect(status().isForbidden());
+
+        mvc.perform(get("/api/specialist/finance/overview")
+                        .cookie(userCookies))
+                .andExpect(status().isForbidden());
+
+        mvc.perform(get("/api/specialist/finance/overview")
+                        .cookie(specialistCookies)
+                        .param("from", "2035-05-01T00:00:00Z")
+                        .param("to", "2035-06-01T00:00:00Z"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.completedCount").value(0))
+                .andExpect(jsonPath("$.pendingCount").value(1))
+                .andExpect(jsonPath("$.workedMinutes").value(0))
+                .andExpect(jsonPath("$.grossIncome").value(0))
+                .andExpect(jsonPath("$.specialistEarnings").value(0))
+                .andExpect(jsonPath("$.pendingGrossIncome").value(1200))
+                .andExpect(jsonPath("$.pendingSpecialistEarnings").value(300))
+                .andExpect(jsonPath("$.specialistSharePercent").value(25.0));
 
         mvc.perform(get("/api/admin/finance/bookings")
                         .cookie(specialistCookies)
                         .param("status", "AWAITING_PAYMENT_CONFIRMATION")
                         .param("officeId", String.valueOf(officeId))
-                        .param("from", "2031-01-01T00:00:00Z")
-                        .param("to", "2031-02-01T00:00:00Z"))
+                        .param("from", "2035-05-01T00:00:00Z")
+                        .param("to", "2035-06-01T00:00:00Z"))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.content[?(@.id == %s)]".formatted(bookingId)).exists())
                 .andExpect(jsonPath("$.content[?(@.id == %s)].externalPaymentUrl".formatted(bookingId)).value("https://pay.example.com/test"))
-                .andExpect(jsonPath("$.content[?(@.id == %s)].bookedPrice".formatted(bookingId)).value(1200.0));
+                .andExpect(jsonPath("$.content[?(@.id == %s)].bookedPrice".formatted(bookingId)).value(1200.0))
+                .andExpect(jsonPath("$.content[?(@.id == %s)].specialistSharePercent".formatted(bookingId)).value(25.0))
+                .andExpect(jsonPath("$.content[?(@.id == %s)].specialistShare".formatted(bookingId)).value(300.0))
+                .andExpect(jsonPath("$.content[?(@.id == %s)].businessShare".formatted(bookingId)).value(900.0));
 
         mvc.perform(get("/api/admin/finance/bookings")
                         .cookie(specialistCookies)
@@ -386,7 +529,7 @@ class BookingFlowIT extends IntegrationTestBase {
 
         mvc.perform(get("/api/admin/finance/bookings")
                         .cookie(specialistCookies)
-                        .param("from", "2040-01-01T00:00:00Z"))
+                        .param("from", "2040-05-01T00:00:00Z"))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.content[?(@.id == %s)]".formatted(bookingId)).doesNotExist());
 
@@ -400,6 +543,19 @@ class BookingFlowIT extends IntegrationTestBase {
                         .cookie(specialistCookies))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.status").value("CONFIRMED"));
+
+        mvc.perform(get("/api/specialist/finance/overview")
+                        .cookie(specialistCookies)
+                        .param("from", "2035-05-01T00:00:00Z")
+                        .param("to", "2035-06-01T00:00:00Z"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.completedCount").value(1))
+                .andExpect(jsonPath("$.pendingCount").value(0))
+                .andExpect(jsonPath("$.workedMinutes").value(60))
+                .andExpect(jsonPath("$.grossIncome").value(1200))
+                .andExpect(jsonPath("$.specialistEarnings").value(300))
+                .andExpect(jsonPath("$.pendingGrossIncome").value(0))
+                .andExpect(jsonPath("$.pendingSpecialistEarnings").value(0));
 
         mvc.perform(get("/api/admin/finance/bookings")
                         .cookie(specialistCookies)
@@ -417,7 +573,7 @@ class BookingFlowIT extends IntegrationTestBase {
                                   "amount":250,
                                   "category":"Materials",
                                   "description":"Booking flow expense",
-                                  "expenseDate":"2031-01-10",
+                                  "expenseDate":"2035-05-10",
                                   "officeId":%s
                                 }
                                 """.formatted(officeId)))
@@ -426,16 +582,21 @@ class BookingFlowIT extends IntegrationTestBase {
         mvc.perform(get("/api/admin/finance/summary")
                         .cookie(specialistCookies)
                         .param("officeId", String.valueOf(officeId))
-                        .param("from", "2031-01-01T00:00:00Z")
-                        .param("to", "2031-02-01T00:00:00Z")
-                        .param("expenseFrom", "2031-01-01")
-                        .param("expenseTo", "2031-01-31"))
+                        .param("from", "2035-05-01T00:00:00Z")
+                        .param("to", "2035-06-01T00:00:00Z")
+                        .param("expenseFrom", "2035-05-01")
+                        .param("expenseTo", "2035-05-31"))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.pendingCount").value(0))
                 .andExpect(jsonPath("$.confirmedCount").value(1))
                 .andExpect(jsonPath("$.income").value(1200))
+                .andExpect(jsonPath("$.specialistEarnings").value(300))
+                .andExpect(jsonPath("$.businessIncome").value(900))
                 .andExpect(jsonPath("$.expenses").value(250))
-                .andExpect(jsonPath("$.result").value(950));
+                .andExpect(jsonPath("$.taxableIncome").value(650))
+                .andExpect(jsonPath("$.quarterlyTaxPercent").value(5.0))
+                .andExpect(jsonPath("$.estimatedTax").value(32.5))
+                .andExpect(jsonPath("$.result").value(650));
 
         mvc.perform(get("/api/admin/finance/summary")
                         .cookie(userCookies)
@@ -900,6 +1061,12 @@ class BookingFlowIT extends IntegrationTestBase {
         service.setActive(active);
         service.setExternalPaymentUrl("https://pay.example.com/test");
         return serviceOfferingRepository.save(service).getId();
+    }
+
+    private void deactivateService(long serviceId) {
+        ServiceOffering service = serviceOfferingRepository.findById(serviceId).orElseThrow();
+        service.setActive(false);
+        serviceOfferingRepository.save(service);
     }
 
     private String createUser() {

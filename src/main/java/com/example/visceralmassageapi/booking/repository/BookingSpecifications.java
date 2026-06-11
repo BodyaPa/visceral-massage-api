@@ -36,4 +36,26 @@ public final class BookingSpecifications {
             return builder.and(predicates.toArray(Predicate[]::new));
         };
     }
+
+    public static Specification<Booking> specialistFinanceFilter(
+            long specialistId,
+            BookingStatus status,
+            OffsetDateTime from,
+            OffsetDateTime to
+    ) {
+        return (root, query, builder) -> {
+            var predicates = new ArrayList<Predicate>();
+            predicates.add(builder.equal(root.get("specialist").get("id"), specialistId));
+            if (status != null) {
+                predicates.add(builder.equal(root.get("status"), status));
+            }
+            if (from != null) {
+                predicates.add(builder.greaterThanOrEqualTo(root.get("startsAt"), from));
+            }
+            if (to != null) {
+                predicates.add(builder.lessThan(root.get("startsAt"), to));
+            }
+            return builder.and(predicates.toArray(Predicate[]::new));
+        };
+    }
 }

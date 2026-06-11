@@ -6,7 +6,12 @@ public record FinanceSummaryResponse(
         long pendingCount,
         long confirmedCount,
         BigDecimal income,
+        BigDecimal specialistEarnings,
+        BigDecimal businessIncome,
         BigDecimal expenses,
+        BigDecimal taxableIncome,
+        BigDecimal quarterlyTaxPercent,
+        BigDecimal estimatedTax,
         BigDecimal result
 ) {
 }

@@ -456,6 +456,39 @@ class SpecialistScheduleManagementIT extends IntegrationTestBase {
     }
 
     @Test
+    void masterSpecialistCanListOtherSpecialistBookingsButRegularSpecialistCannot() throws Exception {
+        Cookie[] ownerCookies = loginCookies(OWNER_PHONE);
+        User otherSpecialist = createUserWithRoles(uniquePhone(), UserRole.SPECIALIST);
+        User regularSpecialist = createUserWithRoles(uniquePhone(), UserRole.SPECIALIST);
+        Cookie[] regularSpecialistCookies = loginCookies(regularSpecialist.getPhone());
+        User client = createUserWithRoles(uniquePhone());
+        SpecialistAvailabilityBlock block = createAvailabilityEntity(
+                otherSpecialist,
+                "2032-03-02T08:00:00Z",
+                "2032-03-02T09:00:00Z"
+        );
+        ServiceOffering service = createService();
+        Booking booking = createBookingEntity(client, otherSpecialist, block, service);
+
+        mvc.perform(get("/api/admin/schedule/bookings")
+                        .cookie(ownerCookies)
+                        .param("specialistId", String.valueOf(otherSpecialist.getId()))
+                        .param("from", "2032-03-01T00:00:00Z")
+                        .param("to", "2032-03-08T00:00:00Z"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$[0].id").value(booking.getId()))
+                .andExpect(jsonPath("$[0].clientId").value(client.getId()))
+                .andExpect(jsonPath("$[0].specialistId").value(otherSpecialist.getId()));
+
+        mvc.perform(get("/api/admin/schedule/bookings")
+                        .cookie(regularSpecialistCookies)
+                        .param("specialistId", String.valueOf(otherSpecialist.getId()))
+                        .param("from", "2032-03-01T00:00:00Z")
+                        .param("to", "2032-03-08T00:00:00Z"))
+                .andExpect(status().isForbidden());
+    }
+
+    @Test
     void masterSpecialistCanCopyOtherSpecialistDayPlan() throws Exception {
         Cookie[] ownerCookies = loginCookies(OWNER_PHONE);
         User otherSpecialist = createUserWithRoles(uniquePhone(), UserRole.SPECIALIST);
@@ -494,6 +527,42 @@ class SpecialistScheduleManagementIT extends IntegrationTestBase {
                 .andExpect(jsonPath("$[?(@.startsAt == '2033-01-04T08:00:00Z')]").exists());
 
         availabilityBlockRepository.delete(sourceBlock);
+    }
+
+    @Test
+    void regularSpecialistCannotCopyOtherSpecialistDayPlan() throws Exception {
+        Cookie[] ownerCookies = loginCookies(OWNER_PHONE);
+        User otherSpecialist = createUserWithRoles(uniquePhone(), UserRole.SPECIALIST);
+        User regularSpecialist = createUserWithRoles(uniquePhone(), UserRole.SPECIALIST);
+        Cookie[] regularSpecialistCookies = loginCookies(regularSpecialist.getPhone());
+        createAvailabilityEntity(
+                otherSpecialist,
+                "2033-03-02T08:00:00Z",
+                "2033-03-02T09:00:00Z"
+        );
+
+        mvc.perform(post("/api/admin/schedule/day-copy")
+                        .with(csrf())
+                        .cookie(regularSpecialistCookies)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {
+                                  "specialistId":%s,
+                                  "sourceDate":"2033-03-02",
+                                  "targetDates":["2033-03-03"],
+                                  "includeAvailability":true,
+                                  "includeFixedEvents":false
+                                }
+                                """.formatted(otherSpecialist.getId())))
+                .andExpect(status().isForbidden());
+
+        mvc.perform(get("/api/admin/schedule/availability")
+                        .cookie(ownerCookies)
+                        .param("specialistId", String.valueOf(otherSpecialist.getId()))
+                        .param("from", "2033-03-03T00:00:00Z")
+                        .param("to", "2033-03-04T00:00:00Z"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$").isEmpty());
     }
 
     @Test
@@ -618,6 +687,24 @@ class SpecialistScheduleManagementIT extends IntegrationTestBase {
         service.setBasePrice(BigDecimal.valueOf(1000));
         service.setActive(true);
         return serviceOfferingRepository.save(service);
+    }
+
+    private Booking createBookingEntity(
+            User client,
+            User specialist,
+            SpecialistAvailabilityBlock block,
+            ServiceOffering service
+    ) {
+        Booking booking = new Booking();
+        booking.setUser(client);
+        booking.setSpecialist(specialist);
+        booking.setService(service);
+        booking.setAvailabilityBlock(block);
+        booking.setStatus(BookingStatus.AWAITING_PAYMENT_CONFIRMATION);
+        booking.setStartsAt(block.getStartsAt());
+        booking.setEndsAt(block.getEndsAt());
+        booking.setBookedPrice(service.getBasePrice());
+        return bookingRepository.save(booking);
     }
 
     private Cookie[] loginCookies(String phone) throws Exception {

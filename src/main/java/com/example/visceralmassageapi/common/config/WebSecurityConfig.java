@@ -61,6 +61,7 @@ public class WebSecurityConfig {
                         .requestMatchers("/api/admin/schedule", "/api/admin/schedule/**").hasRole("SPECIALIST")
                         .requestMatchers("/api/admin/finance", "/api/admin/finance/**").hasRole("FINANCE_MANAGER")
                         .requestMatchers("/api/admin/**").hasRole("MASTER")
+                        .requestMatchers("/api/specialist", "/api/specialist/**").hasRole("SPECIALIST")
 
                         // everything else in /api requires login (calendar, booking, etc.)
                         .requestMatchers("/api/**").authenticated()

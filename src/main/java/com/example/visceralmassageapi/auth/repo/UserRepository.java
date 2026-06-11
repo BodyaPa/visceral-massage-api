@@ -7,6 +7,7 @@ import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 
+import java.util.List;
 import java.util.Optional;
 
 public interface UserRepository extends JpaRepository<User, Long> {
@@ -23,6 +24,15 @@ public interface UserRepository extends JpaRepository<User, Long> {
             WHERE role = :role
             """)
     boolean existsByAssignedRole(UserRole role);
+
+    @Query("""
+            SELECT user
+            FROM User user
+            WHERE user.enabled = true
+            AND :role MEMBER OF user.roles
+            ORDER BY user.lastName ASC, user.firstName ASC, user.id ASC
+            """)
+    List<User> findEnabledUsersByRole(UserRole role);
 
     @Query(value = """
             SELECT DISTINCT user
