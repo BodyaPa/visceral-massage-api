@@ -5,6 +5,7 @@ import com.example.visceralmassageapi.auth.domain.UserRole;
 import com.example.visceralmassageapi.auth.repo.UserRepository;
 import com.example.visceralmassageapi.booking.domain.Booking;
 import com.example.visceralmassageapi.booking.domain.BookingStatus;
+import com.example.visceralmassageapi.booking.domain.SpecialistPayoutStatus;
 import com.example.visceralmassageapi.booking.dto.BookingRequest;
 import com.example.visceralmassageapi.booking.dto.BookingResponse;
 import com.example.visceralmassageapi.booking.dto.FinanceBookingResponse;
@@ -244,7 +245,30 @@ public class BookingService {
         }
 
         booking.setStatus(BookingStatus.CONFIRMED);
+        booking.setSpecialistPayoutStatus(SpecialistPayoutStatus.PENDING);
         auditLogger.bookingPaymentConfirmed(booking.getId(), actorId);
+        return toFinanceResponse(booking);
+    }
+
+    @Transactional
+    public FinanceBookingResponse markSpecialistPayoutPaid(long bookingId, long actorId) {
+        Booking booking = bookingRepository.findById(bookingId)
+                .orElseThrow(() -> new NotFoundException("Booking not found"));
+        User actor = userRepository.findById(actorId)
+                .orElseThrow(() -> new NotFoundException("User not found"));
+
+        if (booking.getStatus() != BookingStatus.CONFIRMED) {
+            throw new BadRequestException("Only confirmed bookings can be paid out");
+        }
+
+        if (booking.getSpecialistPayoutStatus() == SpecialistPayoutStatus.PAID) {
+            throw new BadRequestException("Specialist payout is already paid");
+        }
+
+        booking.setSpecialistPayoutStatus(SpecialistPayoutStatus.PAID);
+        booking.setSpecialistPayoutPaidAt(OffsetDateTime.now());
+        booking.setSpecialistPayoutPaidBy(actor);
+        auditLogger.specialistPayoutMarkedPaid(booking.getId(), actorId);
         return toFinanceResponse(booking);
     }
 
@@ -293,6 +317,9 @@ public class BookingService {
                 specialistSharePercent,
                 specialistShare,
                 businessShare,
+                booking.getSpecialistPayoutStatus(),
+                booking.getSpecialistPayoutPaidAt(),
+                booking.getSpecialistPayoutPaidBy() == null ? null : booking.getSpecialistPayoutPaidBy().getId(),
                 specialist.getId(),
                 displayName(specialist),
                 office == null ? null : office.getId(),

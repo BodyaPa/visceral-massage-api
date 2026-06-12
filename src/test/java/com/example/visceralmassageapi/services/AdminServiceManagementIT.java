@@ -108,12 +108,16 @@ class AdminServiceManagementIT extends IntegrationTestBase {
         long uaOnlyId = createService(ownerCookies, "Тільки українською", null, true);
         createService(ownerCookies, "Неактивна", "Inactive", false);
 
-        mvc.perform(get("/api/services").param("lang", "ua"))
+        mvc.perform(get("/api/services")
+                        .param("lang", "ua")
+                        .param("size", "200"))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.content[?(@.id == %s)]".formatted(activeId)).exists())
                 .andExpect(jsonPath("$.content[?(@.id == %s)]".formatted(uaOnlyId)).exists());
 
-        mvc.perform(get("/api/services").param("lang", "en"))
+        mvc.perform(get("/api/services")
+                        .param("lang", "en")
+                        .param("size", "200"))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.content[?(@.id == %s)]".formatted(activeId)).exists())
                 .andExpect(jsonPath("$.content[?(@.id == %s)]".formatted(uaOnlyId)).doesNotExist());

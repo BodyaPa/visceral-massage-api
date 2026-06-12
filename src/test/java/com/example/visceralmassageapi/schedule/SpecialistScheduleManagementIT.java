@@ -11,6 +11,7 @@ import com.example.visceralmassageapi.booking.domain.BookingStatus;
 import com.example.visceralmassageapi.booking.repository.BookingRepository;
 import com.example.visceralmassageapi.schedule.domain.SpecialistAvailabilityBlock;
 import com.example.visceralmassageapi.schedule.repository.SpecialistAvailabilityBlockRepository;
+import com.example.visceralmassageapi.services.entity.ServiceBookingMode;
 import com.example.visceralmassageapi.services.entity.ServiceOffering;
 import com.example.visceralmassageapi.services.repository.ServiceOfferingRepository;
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -566,6 +567,97 @@ class SpecialistScheduleManagementIT extends IntegrationTestBase {
     }
 
     @Test
+    void masterSpecialistCanManageOtherSpecialistEventsButRegularSpecialistCannot() throws Exception {
+        Cookie[] ownerCookies = loginCookies(OWNER_PHONE);
+        User otherSpecialist = createUserWithRoles(uniquePhone(), UserRole.SPECIALIST);
+        User regularSpecialist = createUserWithRoles(uniquePhone(), UserRole.SPECIALIST);
+        Cookie[] regularSpecialistCookies = loginCookies(regularSpecialist.getPhone());
+        ServiceOffering eventService = createFixedEventService();
+        long officeId = createOffice();
+
+        var createResult = mvc.perform(post("/api/admin/schedule/events")
+                        .with(csrf())
+                        .cookie(ownerCookies)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {
+                                  "specialistId":%s,
+                                  "serviceId":%s,
+                                  "officeId":%s,
+                                  "startsAt":"2033-04-02T08:00:00Z",
+                                  "endsAt":"2033-04-02T09:30:00Z",
+                                  "capacity":4,
+                                  "note":"Owner-created event",
+                                  "active":true
+                                }
+                                """.formatted(otherSpecialist.getId(), eventService.getId(), officeId)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.specialistId").value(otherSpecialist.getId()))
+                .andExpect(jsonPath("$.active").value(true))
+                .andReturn();
+
+        long eventId = objectMapper.readTree(createResult.getResponse().getContentAsString()).path("id").asLong();
+
+        mvc.perform(get("/api/admin/schedule/events")
+                        .cookie(ownerCookies)
+                        .param("specialistId", String.valueOf(otherSpecialist.getId()))
+                        .param("from", "2033-04-01T00:00:00Z")
+                        .param("to", "2033-04-08T00:00:00Z"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$[0].id").value(eventId));
+
+        mvc.perform(get("/api/admin/schedule/events")
+                        .cookie(regularSpecialistCookies)
+                        .param("specialistId", String.valueOf(otherSpecialist.getId()))
+                        .param("from", "2033-04-01T00:00:00Z")
+                        .param("to", "2033-04-08T00:00:00Z"))
+                .andExpect(status().isForbidden());
+
+        mvc.perform(get("/api/admin/schedule/events/enrollments")
+                        .cookie(regularSpecialistCookies)
+                        .param("specialistId", String.valueOf(otherSpecialist.getId()))
+                        .param("from", "2033-04-01T00:00:00Z")
+                        .param("to", "2033-04-08T00:00:00Z"))
+                .andExpect(status().isForbidden());
+
+        mvc.perform(put("/api/admin/schedule/events/{id}", eventId)
+                        .with(csrf())
+                        .cookie(regularSpecialistCookies)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {
+                                  "serviceId":%s,
+                                  "officeId":%s,
+                                  "startsAt":"2033-04-02T08:00:00Z",
+                                  "endsAt":"2033-04-02T09:30:00Z",
+                                  "capacity":4,
+                                  "note":"Regular specialist edit attempt",
+                                  "active":false
+                                }
+                                """.formatted(eventService.getId(), officeId)))
+                .andExpect(status().isForbidden());
+
+        mvc.perform(put("/api/admin/schedule/events/{id}", eventId)
+                        .with(csrf())
+                        .cookie(ownerCookies)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {
+                                  "serviceId":%s,
+                                  "officeId":%s,
+                                  "startsAt":"2033-04-02T08:00:00Z",
+                                  "endsAt":"2033-04-02T09:30:00Z",
+                                  "capacity":5,
+                                  "note":"Owner updated event",
+                                  "active":true
+                                }
+                                """.formatted(eventService.getId(), officeId)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.capacity").value(5))
+                .andExpect(jsonPath("$.note").value("Owner updated event"));
+    }
+
+    @Test
     void dayPlanCopyReportsConflictsWithoutPartialCopy() throws Exception {
         Cookie[] specialistCookies = loginCookies(OWNER_PHONE);
         User specialist = userRepository.findByPhone(OWNER_PHONE).orElseThrow();
@@ -685,6 +777,17 @@ class SpecialistScheduleManagementIT extends IntegrationTestBase {
         service.setDescriptionUa("Test");
         service.setDurationMinutes(60);
         service.setBasePrice(BigDecimal.valueOf(1000));
+        service.setActive(true);
+        return serviceOfferingRepository.save(service);
+    }
+
+    private ServiceOffering createFixedEventService() {
+        ServiceOffering service = new ServiceOffering();
+        service.setTitleUa("Schedule event service " + PHONE_SUFFIX.incrementAndGet());
+        service.setDescriptionUa("Test event");
+        service.setDurationMinutes(90);
+        service.setBasePrice(BigDecimal.valueOf(700));
+        service.setBookingMode(ServiceBookingMode.FIXED_EVENT);
         service.setActive(true);
         return serviceOfferingRepository.save(service);
     }

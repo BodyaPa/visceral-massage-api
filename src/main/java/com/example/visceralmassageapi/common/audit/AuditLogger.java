@@ -43,6 +43,10 @@ public class AuditLogger {
         log.info("audit event=booking_payment_confirmed bookingId={} actorId={}", bookingId, actorId);
     }
 
+    public void specialistPayoutMarkedPaid(long bookingId, long actorId) {
+        log.info("audit event=specialist_payout_marked_paid bookingId={} actorId={}", bookingId, actorId);
+    }
+
     public void specialistFinanceSettingsUpdated(long specialistId, long actorId) {
         log.info("audit event=specialist_finance_settings_updated specialistId={} actorId={}", specialistId, actorId);
     }

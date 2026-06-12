@@ -551,9 +551,13 @@ class BookingFlowIT extends IntegrationTestBase {
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.completedCount").value(1))
                 .andExpect(jsonPath("$.pendingCount").value(0))
+                .andExpect(jsonPath("$.payoutPendingCount").value(1))
+                .andExpect(jsonPath("$.payoutPaidCount").value(0))
                 .andExpect(jsonPath("$.workedMinutes").value(60))
                 .andExpect(jsonPath("$.grossIncome").value(1200))
                 .andExpect(jsonPath("$.specialistEarnings").value(300))
+                .andExpect(jsonPath("$.payoutPendingEarnings").value(300))
+                .andExpect(jsonPath("$.payoutPaidEarnings").value(0))
                 .andExpect(jsonPath("$.pendingGrossIncome").value(0))
                 .andExpect(jsonPath("$.pendingSpecialistEarnings").value(0));
 
@@ -562,7 +566,56 @@ class BookingFlowIT extends IntegrationTestBase {
                         .param("status", "CONFIRMED")
                         .param("officeId", String.valueOf(officeId)))
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$.content[?(@.id == %s)]".formatted(bookingId)).exists());
+                .andExpect(jsonPath("$.content[?(@.id == %s)]".formatted(bookingId)).exists())
+                .andExpect(jsonPath("$.content[?(@.id == %s)].specialistPayoutStatus".formatted(bookingId)).value("PENDING"));
+
+        mvc.perform(post("/api/admin/finance/bookings/{id}/specialist-payout/mark-paid", bookingId)
+                        .with(csrf())
+                        .cookie(userCookies))
+                .andExpect(status().isForbidden());
+
+        mvc.perform(post("/api/admin/finance/bookings/{id}/specialist-payout/mark-paid", bookingId)
+                        .with(csrf())
+                        .cookie(specialistCookies))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.specialistPayoutStatus").value("PAID"))
+                .andExpect(jsonPath("$.specialistPayoutPaidAt").exists())
+                .andExpect(jsonPath("$.specialistPayoutPaidByUserId").value(specialist.getId()));
+
+        mvc.perform(post("/api/admin/finance/bookings/{id}/specialist-payout/mark-paid", bookingId)
+                        .with(csrf())
+                        .cookie(specialistCookies))
+                .andExpect(status().isBadRequest());
+
+        mvc.perform(get("/api/specialist/finance/overview")
+                        .cookie(specialistCookies)
+                        .param("from", "2035-05-01T00:00:00Z")
+                        .param("to", "2035-06-01T00:00:00Z"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.payoutPendingCount").value(0))
+                .andExpect(jsonPath("$.payoutPaidCount").value(1))
+                .andExpect(jsonPath("$.payoutPendingEarnings").value(0))
+                .andExpect(jsonPath("$.payoutPaidEarnings").value(300));
+
+        mvc.perform(get("/api/admin/finance/export/xlsx")
+                        .cookie(specialistCookies)
+                        .param("status", "CONFIRMED")
+                        .param("officeId", String.valueOf(officeId))
+                        .param("from", "2035-05-01T00:00:00Z")
+                        .param("to", "2035-06-01T00:00:00Z"))
+                .andExpect(status().isOk())
+                .andExpect(header().string("Content-Type", org.hamcrest.Matchers.containsString("spreadsheetml.sheet")))
+                .andExpect(header().string("Content-Disposition", org.hamcrest.Matchers.containsString("ataraksia-finance.xlsx")));
+
+        mvc.perform(get("/api/admin/finance/export/pdf")
+                        .cookie(specialistCookies)
+                        .param("status", "CONFIRMED")
+                        .param("officeId", String.valueOf(officeId))
+                        .param("from", "2035-05-01T00:00:00Z")
+                        .param("to", "2035-06-01T00:00:00Z"))
+                .andExpect(status().isOk())
+                .andExpect(header().string("Content-Type", org.hamcrest.Matchers.containsString("application/pdf")))
+                .andExpect(header().string("Content-Disposition", org.hamcrest.Matchers.containsString("ataraksia-finance.pdf")));
 
         mvc.perform(post("/api/admin/finance/expenses")
                         .with(csrf())

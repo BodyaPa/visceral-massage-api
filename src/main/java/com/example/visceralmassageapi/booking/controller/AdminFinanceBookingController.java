@@ -36,6 +36,11 @@ public class AdminFinanceBookingController {
         return ResponseEntity.ok(bookingService.confirmPayment(id, currentUserId(authentication)));
     }
 
+    @PostMapping("/{id}/specialist-payout/mark-paid")
+    public ResponseEntity<FinanceBookingResponse> markSpecialistPayoutPaid(Authentication authentication, @PathVariable long id) {
+        return ResponseEntity.ok(bookingService.markSpecialistPayoutPaid(id, currentUserId(authentication)));
+    }
+
     private long currentUserId(Authentication authentication) {
         if (authentication == null || !(authentication.getPrincipal() instanceof Long userId)) {
             throw new IllegalArgumentException("Not authenticated");

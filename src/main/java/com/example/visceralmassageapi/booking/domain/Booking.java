@@ -54,6 +54,17 @@ public class Booking {
     @Column(name = "booked_price", nullable = false, precision = 12, scale = 2)
     private BigDecimal bookedPrice;
 
+    @Enumerated(EnumType.STRING)
+    @Column(name = "specialist_payout_status", nullable = false, length = 24)
+    private SpecialistPayoutStatus specialistPayoutStatus = SpecialistPayoutStatus.PENDING;
+
+    @Column(name = "specialist_payout_paid_at")
+    private OffsetDateTime specialistPayoutPaidAt;
+
+    @ManyToOne
+    @JoinColumn(name = "specialist_payout_paid_by_user_id")
+    private User specialistPayoutPaidBy;
+
     @Column(name = "reminder_opt_in", nullable = false)
     private boolean reminderOptIn;
 

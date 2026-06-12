@@ -4,6 +4,7 @@ import com.example.visceralmassageapi.auth.domain.UserRole;
 import com.example.visceralmassageapi.auth.repo.UserRepository;
 import com.example.visceralmassageapi.booking.domain.Booking;
 import com.example.visceralmassageapi.booking.domain.BookingStatus;
+import com.example.visceralmassageapi.booking.domain.SpecialistPayoutStatus;
 import com.example.visceralmassageapi.booking.repository.BookingRepository;
 import com.example.visceralmassageapi.common.exception.BadRequestException;
 import com.example.visceralmassageapi.common.exception.NotFoundException;
@@ -50,9 +51,23 @@ public class SpecialistFinanceOverviewService {
         return new SpecialistFinanceOverviewResponse(
                 completedBookings.size(),
                 pendingBookings.size(),
+                completedBookings.stream().filter(booking -> booking.getSpecialistPayoutStatus() == SpecialistPayoutStatus.PENDING).count(),
+                completedBookings.stream().filter(booking -> booking.getSpecialistPayoutStatus() == SpecialistPayoutStatus.PAID).count(),
                 workedMinutes(completedBookings),
                 grossIncome,
                 sumSpecialistShare(completedBookings, sharePercent),
+                sumSpecialistShare(
+                        completedBookings.stream()
+                                .filter(booking -> booking.getSpecialistPayoutStatus() == SpecialistPayoutStatus.PENDING)
+                                .toList(),
+                        sharePercent
+                ),
+                sumSpecialistShare(
+                        completedBookings.stream()
+                                .filter(booking -> booking.getSpecialistPayoutStatus() == SpecialistPayoutStatus.PAID)
+                                .toList(),
+                        sharePercent
+                ),
                 pendingGrossIncome,
                 sumSpecialistShare(pendingBookings, sharePercent),
                 sharePercent

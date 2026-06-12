@@ -1,6 +1,7 @@
 package com.example.visceralmassageapi.booking.dto;
 
 import com.example.visceralmassageapi.booking.domain.BookingStatus;
+import com.example.visceralmassageapi.booking.domain.SpecialistPayoutStatus;
 
 import java.math.BigDecimal;
 import java.time.OffsetDateTime;
@@ -18,6 +19,9 @@ public record FinanceBookingResponse(
         BigDecimal specialistSharePercent,
         BigDecimal specialistShare,
         BigDecimal businessShare,
+        SpecialistPayoutStatus specialistPayoutStatus,
+        OffsetDateTime specialistPayoutPaidAt,
+        Long specialistPayoutPaidByUserId,
         long specialistId,
         String specialistName,
         Long officeId,
