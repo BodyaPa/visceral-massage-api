@@ -14,6 +14,7 @@ public record FinanceBookingResponse(
         String clientContact,
         long serviceId,
         String serviceTitleUa,
+        String serviceTitleEn,
         String externalPaymentUrl,
         BigDecimal bookedPrice,
         BigDecimal specialistSharePercent,

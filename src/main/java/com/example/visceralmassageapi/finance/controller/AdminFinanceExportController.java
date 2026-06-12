@@ -27,10 +27,11 @@ public class AdminFinanceExportController {
             @RequestParam(required = false) BookingStatus status,
             @RequestParam(required = false) Long officeId,
             @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME) OffsetDateTime from,
-            @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME) OffsetDateTime to
+            @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME) OffsetDateTime to,
+            @RequestParam(defaultValue = "ua") String locale
     ) {
         return download(
-                exportService.exportExcel(status, officeId, from, to),
+                exportService.exportExcel(status, officeId, from, to, locale),
                 "ataraksia-finance.xlsx",
                 MediaType.parseMediaType("application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")
         );
@@ -41,9 +42,10 @@ public class AdminFinanceExportController {
             @RequestParam(required = false) BookingStatus status,
             @RequestParam(required = false) Long officeId,
             @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME) OffsetDateTime from,
-            @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME) OffsetDateTime to
+            @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME) OffsetDateTime to,
+            @RequestParam(defaultValue = "ua") String locale
     ) {
-        return download(exportService.exportPdf(status, officeId, from, to), "ataraksia-finance.pdf", MediaType.APPLICATION_PDF);
+        return download(exportService.exportPdf(status, officeId, from, to, locale), "ataraksia-finance.pdf", MediaType.APPLICATION_PDF);
     }
 
     private ResponseEntity<byte[]> download(byte[] body, String filename, MediaType contentType) {

@@ -30,13 +30,13 @@ public class FinanceExportService {
     private final SpecialistFinanceSettingsRepository specialistFinanceSettingsRepository;
 
     @Transactional(readOnly = true)
-    public byte[] exportExcel(BookingStatus status, Long officeId, OffsetDateTime from, OffsetDateTime to) {
-        return buildXlsx(rows(status, officeId, from, to));
+    public byte[] exportExcel(BookingStatus status, Long officeId, OffsetDateTime from, OffsetDateTime to, String locale) {
+        return buildXlsx(rows(status, officeId, from, to, locale));
     }
 
     @Transactional(readOnly = true)
-    public byte[] exportPdf(BookingStatus status, Long officeId, OffsetDateTime from, OffsetDateTime to) {
-        List<List<String>> rows = rows(status, officeId, from, to);
+    public byte[] exportPdf(BookingStatus status, Long officeId, OffsetDateTime from, OffsetDateTime to, String locale) {
+        List<List<String>> rows = rows(status, officeId, from, to, locale);
         List<String> lines = new ArrayList<>();
         lines.add("Ataraksia finance report");
         lines.add("Generated rows: " + Math.max(rows.size() - 1, 0));
@@ -47,7 +47,7 @@ public class FinanceExportService {
         return buildPdf(lines);
     }
 
-    private List<List<String>> rows(BookingStatus status, Long officeId, OffsetDateTime from, OffsetDateTime to) {
+    private List<List<String>> rows(BookingStatus status, Long officeId, OffsetDateTime from, OffsetDateTime to, String locale) {
         List<Booking> bookings = bookingRepository.findAll(financeFilter(status, officeId, from, to));
         Map<Long, BigDecimal> sharePercents = specialistFinanceSettingsRepository
                 .findBySpecialistUserIdIn(bookings.stream().map(booking -> booking.getSpecialist().getId()).collect(Collectors.toSet()))
@@ -80,7 +80,7 @@ public class FinanceExportService {
                     booking.getStatus().name(),
                     displayName(booking.getUser()),
                     displayName(booking.getSpecialist()),
-                    booking.getService().getTitleUa(),
+                    serviceTitle(booking, locale),
                     booking.getOffice() == null ? "" : booking.getOffice().getName(),
                     DateTimeFormatter.ISO_OFFSET_DATE_TIME.format(booking.getStartsAt()),
                     booking.getBookedPrice().toPlainString(),
@@ -91,6 +91,14 @@ public class FinanceExportService {
             ));
         }
         return rows;
+    }
+
+    private String serviceTitle(Booking booking, String locale) {
+        String titleEn = booking.getService().getTitleEn();
+        if ("en".equalsIgnoreCase(locale) && titleEn != null && !titleEn.isBlank()) {
+            return titleEn.trim();
+        }
+        return booking.getService().getTitleUa();
     }
 
     private byte[] buildXlsx(List<List<String>> rows) {

@@ -88,6 +88,7 @@ class BookingFlowIT extends IntegrationTestBase {
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.status").value("AWAITING_PAYMENT_CONFIRMATION"))
                 .andExpect(jsonPath("$.serviceId").value(serviceId))
+                .andExpect(jsonPath("$.serviceTitleEn").exists())
                 .andExpect(jsonPath("$.officeId").value(officeId))
                 .andExpect(jsonPath("$.reminderOptIn").value(true));
 
@@ -104,7 +105,8 @@ class BookingFlowIT extends IntegrationTestBase {
                         .param("sort", "startsAt,desc"))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.content[0].id").exists())
-                .andExpect(jsonPath("$.content[0].serviceId").value(serviceId));
+                .andExpect(jsonPath("$.content[0].serviceId").value(serviceId))
+                .andExpect(jsonPath("$.content[0].serviceTitleEn").exists());
 
         mvc.perform(post("/api/bookings")
                         .with(csrf())
@@ -517,6 +519,7 @@ class BookingFlowIT extends IntegrationTestBase {
                 .andExpect(jsonPath("$.content[?(@.id == %s)]".formatted(bookingId)).exists())
                 .andExpect(jsonPath("$.content[?(@.id == %s)].externalPaymentUrl".formatted(bookingId)).value("https://pay.example.com/test"))
                 .andExpect(jsonPath("$.content[?(@.id == %s)].bookedPrice".formatted(bookingId)).value(1200.0))
+                .andExpect(jsonPath("$.content[?(@.id == %s)].serviceTitleEn".formatted(bookingId)).exists())
                 .andExpect(jsonPath("$.content[?(@.id == %s)].specialistSharePercent".formatted(bookingId)).value(25.0))
                 .andExpect(jsonPath("$.content[?(@.id == %s)].specialistShare".formatted(bookingId)).value(300.0))
                 .andExpect(jsonPath("$.content[?(@.id == %s)].businessShare".formatted(bookingId)).value(900.0));
@@ -612,10 +615,12 @@ class BookingFlowIT extends IntegrationTestBase {
                         .param("status", "CONFIRMED")
                         .param("officeId", String.valueOf(officeId))
                         .param("from", "2035-05-01T00:00:00Z")
-                        .param("to", "2035-06-01T00:00:00Z"))
+                        .param("to", "2035-06-01T00:00:00Z")
+                        .param("locale", "en"))
                 .andExpect(status().isOk())
                 .andExpect(header().string("Content-Type", org.hamcrest.Matchers.containsString("application/pdf")))
-                .andExpect(header().string("Content-Disposition", org.hamcrest.Matchers.containsString("ataraksia-finance.pdf")));
+                .andExpect(header().string("Content-Disposition", org.hamcrest.Matchers.containsString("ataraksia-finance.pdf")))
+                .andExpect(content().string(org.hamcrest.Matchers.containsString("Booking ")));
 
         mvc.perform(post("/api/admin/finance/expenses")
                         .with(csrf())
@@ -1107,8 +1112,11 @@ class BookingFlowIT extends IntegrationTestBase {
 
     private long createService(boolean active) {
         ServiceOffering service = new ServiceOffering();
-        service.setTitleUa("Бронювання " + PHONE_SUFFIX.incrementAndGet());
+        int suffix = PHONE_SUFFIX.incrementAndGet();
+        service.setTitleUa("Бронювання " + suffix);
+        service.setTitleEn("Booking " + suffix);
         service.setDescriptionUa("Тестова послуга");
+        service.setDescriptionEn("Test service");
         service.setDurationMinutes(60);
         service.setBasePrice(BigDecimal.valueOf(1200));
         service.setActive(active);

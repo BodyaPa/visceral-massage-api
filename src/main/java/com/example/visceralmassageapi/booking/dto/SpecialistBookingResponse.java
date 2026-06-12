@@ -14,6 +14,7 @@ public record SpecialistBookingResponse(
         String specialistName,
         long serviceId,
         String serviceTitleUa,
+        String serviceTitleEn,
         Long officeId,
         String officeName,
         OffsetDateTime startsAt,

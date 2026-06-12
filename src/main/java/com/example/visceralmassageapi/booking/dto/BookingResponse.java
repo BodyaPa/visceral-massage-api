@@ -9,6 +9,7 @@ public record BookingResponse(
         BookingStatus status,
         long serviceId,
         String serviceTitleUa,
+        String serviceTitleEn,
         long specialistId,
         String specialistName,
         Long officeId,
