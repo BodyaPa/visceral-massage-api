@@ -4,6 +4,7 @@ import com.example.visceralmassageapi.auth.domain.User;
 import com.example.visceralmassageapi.auth.domain.UserRole;
 import com.example.visceralmassageapi.auth.repo.UserRepository;
 import com.example.visceralmassageapi.booking.repository.BookingRepository;
+import com.example.visceralmassageapi.common.config.ScheduleProps;
 import com.example.visceralmassageapi.common.exception.BadRequestException;
 import com.example.visceralmassageapi.common.exception.NotFoundException;
 import com.example.visceralmassageapi.offices.entity.Office;
@@ -42,7 +43,6 @@ import java.util.Set;
 public class FixedEventService {
 
     private static final long MAX_QUERY_DAYS = 93;
-
     private final FixedEventRepository fixedEventRepository;
     private final FixedEventEnrollmentRepository fixedEventEnrollmentRepository;
     private final UserRepository userRepository;
@@ -50,6 +50,7 @@ public class FixedEventService {
     private final OfficeRepository officeRepository;
     private final BookingRepository bookingRepository;
     private final SpecialistAvailabilityBlockRepository availabilityBlockRepository;
+    private final ScheduleProps scheduleProps;
 
     @Transactional(readOnly = true)
     public List<PublicFixedEventResponse> listPublic(
@@ -322,12 +323,15 @@ public class FixedEventService {
             throw new BadRequestException("Event overlaps blocked specialist time");
         }
 
-        if (bookingRepository.existsActiveOverlappingSpecialistBooking(specialistId, request.startsAt(), request.endsAt())) {
-            throw new BadRequestException("Event overlaps an existing individual booking");
+        OffsetDateTime bufferedStartsAt = request.startsAt().minusMinutes(scheduleProps.getAppointmentBufferMinutes());
+        OffsetDateTime bufferedEndsAt = request.endsAt().plusMinutes(scheduleProps.getAppointmentBufferMinutes());
+
+        if (bookingRepository.existsActiveOverlappingSpecialistBooking(specialistId, bufferedStartsAt, bufferedEndsAt)) {
+            throw new BadRequestException("Event is too close to an existing individual booking");
         }
 
-        if (fixedEventRepository.overlapsActiveForSpecialist(specialistId, excludedEventId, request.startsAt(), request.endsAt())) {
-            throw new BadRequestException("Event overlaps another active event");
+        if (fixedEventRepository.overlapsActiveForSpecialist(specialistId, excludedEventId, bufferedStartsAt, bufferedEndsAt)) {
+            throw new BadRequestException("Event is too close to another active event");
         }
     }
 

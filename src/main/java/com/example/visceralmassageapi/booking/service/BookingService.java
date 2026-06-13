@@ -13,6 +13,7 @@ import com.example.visceralmassageapi.booking.dto.ManualBookingRequest;
 import com.example.visceralmassageapi.booking.dto.SpecialistBookingResponse;
 import com.example.visceralmassageapi.booking.repository.BookingRepository;
 import com.example.visceralmassageapi.common.audit.AuditLogger;
+import com.example.visceralmassageapi.common.config.ScheduleProps;
 import com.example.visceralmassageapi.common.exception.BadRequestException;
 import com.example.visceralmassageapi.common.exception.NotFoundException;
 import com.example.visceralmassageapi.finance.repository.SpecialistFinanceSettingsRepository;
@@ -46,7 +47,6 @@ import static com.example.visceralmassageapi.booking.repository.BookingSpecifica
 public class BookingService {
 
     private static final long MAX_SPECIALIST_QUERY_DAYS = 93;
-
     private final BookingRepository bookingRepository;
     private final UserRepository userRepository;
     private final SpecialistAvailabilityBlockRepository availabilityBlockRepository;
@@ -54,6 +54,7 @@ public class BookingService {
     private final AuditLogger auditLogger;
     private final FixedEventRepository fixedEventRepository;
     private final SpecialistFinanceSettingsRepository specialistFinanceSettingsRepository;
+    private final ScheduleProps scheduleProps;
 
     @Transactional
     public BookingResponse create(long userId, BookingRequest request) {
@@ -146,9 +147,30 @@ public class BookingService {
             throw new BadRequestException("Selected booking slot is already booked");
         }
 
-        if (fixedEventRepository.overlapsActiveForSpecialist(block.getSpecialist().getId(), null, bookingStartsAt, bookingEndsAt)) {
+        OffsetDateTime bufferedStartsAt = bookingStartsAt.minusMinutes(scheduleProps.getAppointmentBufferMinutes());
+        OffsetDateTime bufferedEndsAt = bookingEndsAt.plusMinutes(scheduleProps.getAppointmentBufferMinutes());
+
+        boolean bufferedBookingConflict = block.getItemType() == ScheduleBlockType.APPOINTMENT_SLOT
+                ? bookingRepository.existsActiveOverlappingSpecialistBookingOutsideBlock(
+                        block.getSpecialist().getId(),
+                        block.getId(),
+                        bufferedStartsAt,
+                        bufferedEndsAt
+                )
+                : bookingRepository.existsActiveOverlappingSpecialistBooking(
+                        block.getSpecialist().getId(),
+                        bufferedStartsAt,
+                        bufferedEndsAt
+                );
+
+        if (bufferedBookingConflict) {
             auditLogger.bookingConflict(block.getId(), requiredSpecialistId == null ? client.getId() : requiredSpecialistId);
-            throw new BadRequestException("Selected booking slot overlaps a scheduled event");
+            throw new BadRequestException("Selected booking slot is too close to another booking");
+        }
+
+        if (fixedEventRepository.overlapsActiveForSpecialist(block.getSpecialist().getId(), null, bufferedStartsAt, bufferedEndsAt)) {
+            auditLogger.bookingConflict(block.getId(), requiredSpecialistId == null ? client.getId() : requiredSpecialistId);
+            throw new BadRequestException("Selected booking slot is too close to a scheduled event");
         }
 
         Long officeId = block.getOffice() == null ? null : block.getOffice().getId();

@@ -658,6 +658,54 @@ class SpecialistScheduleManagementIT extends IntegrationTestBase {
     }
 
     @Test
+    void fixedEventRequiresThirtyMinuteBufferFromExistingBooking() throws Exception {
+        Cookie[] specialistCookies = loginCookies(OWNER_PHONE);
+        User specialist = userRepository.findByPhone(OWNER_PHONE).orElseThrow();
+        User client = createUserWithRoles(uniquePhone());
+        SpecialistAvailabilityBlock block = createAvailabilityEntity(
+                specialist,
+                "2033-05-02T08:00:00Z",
+                "2033-05-02T09:00:00Z"
+        );
+        ServiceOffering bookingService = createService();
+        createBookingEntity(client, specialist, block, bookingService);
+        ServiceOffering eventService = createFixedEventService();
+        long officeId = createOffice();
+
+        mvc.perform(post("/api/admin/schedule/events")
+                        .with(csrf())
+                        .cookie(specialistCookies)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {
+                                  "serviceId":%s,
+                                  "officeId":%s,
+                                  "startsAt":"2033-05-02T09:15:00Z",
+                                  "endsAt":"2033-05-02T10:15:00Z",
+                                  "capacity":4,
+                                  "active":true
+                                }
+                                """.formatted(eventService.getId(), officeId)))
+                .andExpect(status().isBadRequest());
+
+        mvc.perform(post("/api/admin/schedule/events")
+                        .with(csrf())
+                        .cookie(specialistCookies)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {
+                                  "serviceId":%s,
+                                  "officeId":%s,
+                                  "startsAt":"2033-05-02T09:30:00Z",
+                                  "endsAt":"2033-05-02T10:30:00Z",
+                                  "capacity":4,
+                                  "active":true
+                                }
+                                """.formatted(eventService.getId(), officeId)))
+                .andExpect(status().isOk());
+    }
+
+    @Test
     void dayPlanCopyReportsConflictsWithoutPartialCopy() throws Exception {
         Cookie[] specialistCookies = loginCookies(OWNER_PHONE);
         User specialist = userRepository.findByPhone(OWNER_PHONE).orElseThrow();
@@ -684,6 +732,53 @@ class SpecialistScheduleManagementIT extends IntegrationTestBase {
                         .cookie(specialistCookies)
                         .param("from", "2033-02-03T00:00:00Z")
                         .param("to", "2033-02-04T00:00:00Z"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.length()").value(1));
+    }
+
+    @Test
+    void dayPlanCopyReportsBufferConflictsWithExistingBookings() throws Exception {
+        Cookie[] specialistCookies = loginCookies(OWNER_PHONE);
+        User specialist = userRepository.findByPhone(OWNER_PHONE).orElseThrow();
+        User client = createUserWithRoles(uniquePhone());
+        ServiceOffering service = createService();
+        SpecialistAvailabilityBlock sourceBlock = createAvailabilityEntity(
+                specialist,
+                "2033-06-02T09:15:00Z",
+                "2033-06-02T10:15:00Z"
+        );
+        sourceBlock.setItemType(com.example.visceralmassageapi.schedule.domain.ScheduleBlockType.APPOINTMENT_SLOT);
+        sourceBlock.setService(service);
+        sourceBlock.setCapacity(1);
+        availabilityBlockRepository.save(sourceBlock);
+        SpecialistAvailabilityBlock targetBookedBlock = createAvailabilityEntity(
+                specialist,
+                "2033-06-03T08:00:00Z",
+                "2033-06-03T09:00:00Z"
+        );
+        createBookingEntity(client, specialist, targetBookedBlock, service);
+
+        mvc.perform(post("/api/admin/schedule/day-copy")
+                        .with(csrf())
+                        .cookie(specialistCookies)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {
+                                  "sourceDate":"2033-06-02",
+                                  "targetDates":["2033-06-03"],
+                                  "includeAvailability":true,
+                                  "includeFixedEvents":false
+                                }
+                                """))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.copiedAvailabilityCount").value(0))
+                .andExpect(jsonPath("$.conflicts[0].targetDate").value("2033-06-03"))
+                .andExpect(jsonPath("$.conflicts[0].reason").value("is too close to existing booking"));
+
+        mvc.perform(get("/api/admin/schedule/availability")
+                        .cookie(specialistCookies)
+                        .param("from", "2033-06-03T00:00:00Z")
+                        .param("to", "2033-06-04T00:00:00Z"))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.length()").value(1));
     }

@@ -36,3 +36,5 @@ app:
       - image/webp
       - video/mp4
       - video/webm
+  schedule:
+    appointment-buffer-minutes: 30

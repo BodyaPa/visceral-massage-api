@@ -41,6 +41,22 @@ public interface BookingRepository extends JpaRepository<Booking, Long>, JpaSpec
     boolean existsActiveOverlappingSpecialistBooking(long specialistId, OffsetDateTime startsAt, OffsetDateTime endsAt);
 
     @Query("""
+            SELECT COUNT(booking) > 0
+            FROM Booking booking
+            WHERE booking.specialist.id = :specialistId
+              AND booking.availabilityBlock.id <> :availabilityBlockId
+              AND booking.status <> com.example.visceralmassageapi.booking.domain.BookingStatus.CANCELLED
+              AND booking.startsAt < :endsAt
+              AND booking.endsAt > :startsAt
+            """)
+    boolean existsActiveOverlappingSpecialistBookingOutsideBlock(
+            long specialistId,
+            long availabilityBlockId,
+            OffsetDateTime startsAt,
+            OffsetDateTime endsAt
+    );
+
+    @Query("""
             SELECT booking
             FROM Booking booking
             WHERE booking.availabilityBlock.id = :availabilityBlockId

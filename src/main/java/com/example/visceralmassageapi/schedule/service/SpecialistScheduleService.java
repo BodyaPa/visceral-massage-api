@@ -5,6 +5,7 @@ import com.example.visceralmassageapi.auth.domain.UserRole;
 import com.example.visceralmassageapi.auth.repo.UserRepository;
 import com.example.visceralmassageapi.booking.repository.BookingRepository;
 import com.example.visceralmassageapi.booking.domain.Booking;
+import com.example.visceralmassageapi.common.config.ScheduleProps;
 import com.example.visceralmassageapi.common.exception.BadRequestException;
 import com.example.visceralmassageapi.common.exception.NotFoundException;
 import com.example.visceralmassageapi.offices.entity.Office;
@@ -44,13 +45,13 @@ import java.util.Set;
 public class SpecialistScheduleService {
 
     private static final long MAX_QUERY_DAYS = 93;
-
     private final SpecialistAvailabilityBlockRepository availabilityBlockRepository;
     private final UserRepository userRepository;
     private final OfficeRepository officeRepository;
     private final BookingRepository bookingRepository;
     private final ServiceOfferingRepository serviceOfferingRepository;
     private final FixedEventRepository fixedEventRepository;
+    private final ScheduleProps scheduleProps;
 
     @Transactional(readOnly = true)
     public List<SpecialistAvailabilityResponse> listAvailability(long specialistId, OffsetDateTime from, OffsetDateTime to) {
@@ -125,13 +126,40 @@ public class SpecialistScheduleService {
                 .stream()
                 .map(this::toOccupiedPublicResponse)
                 .toList();
+        List<PublicScheduleUnavailableResponse> bookingBuffers = bookingRepository
+                .findPublicOccupiedBookings(
+                        from.minusMinutes(appointmentBufferMinutes()),
+                        to.plusMinutes(appointmentBufferMinutes()),
+                        officeId,
+                        specialistId
+                )
+                .stream()
+                .flatMap(booking -> bookingBufferPublicResponses(booking, from, to).stream())
+                .toList();
         List<PublicScheduleUnavailableResponse> eventUnavailable = fixedEventRepository
                 .findPublicRange(from, to, officeId, specialistId, null)
                 .stream()
                 .map(this::toFixedEventUnavailableResponse)
                 .toList();
+        List<PublicScheduleUnavailableResponse> eventBuffers = fixedEventRepository
+                .findPublicRange(
+                        from.minusMinutes(appointmentBufferMinutes()),
+                        to.plusMinutes(appointmentBufferMinutes()),
+                        officeId,
+                        specialistId,
+                        null
+                )
+                .stream()
+                .flatMap(event -> fixedEventBufferPublicResponses(event, from, to).stream())
+                .toList();
 
-        return java.util.stream.Stream.of(blocked.stream(), occupied.stream(), eventUnavailable.stream())
+        return java.util.stream.Stream.of(
+                        blocked.stream(),
+                        occupied.stream(),
+                        bookingBuffers.stream(),
+                        eventUnavailable.stream(),
+                        eventBuffers.stream()
+                )
                 .flatMap(stream -> stream)
                 .sorted(java.util.Comparator.comparing(PublicScheduleUnavailableResponse::startsAt))
                 .toList();
@@ -331,11 +359,15 @@ public class SpecialistScheduleService {
         if (availabilityBlockRepository.overlaps(specialistId, null, startsAt, endsAt)) {
             return "overlaps existing schedule item";
         }
-        if (bookingRepository.existsActiveOverlappingSpecialistBooking(specialistId, startsAt, endsAt)) {
-            return "overlaps existing booking";
+
+        OffsetDateTime bufferedStartsAt = startsAt.minusMinutes(appointmentBufferMinutes());
+        OffsetDateTime bufferedEndsAt = endsAt.plusMinutes(appointmentBufferMinutes());
+
+        if (bookingRepository.existsActiveOverlappingSpecialistBooking(specialistId, bufferedStartsAt, bufferedEndsAt)) {
+            return "is too close to existing booking";
         }
-        if (fixedEventRepository.overlapsActiveForSpecialist(specialistId, null, startsAt, endsAt)) {
-            return "overlaps existing event";
+        if (fixedEventRepository.overlapsActiveForSpecialist(specialistId, null, bufferedStartsAt, bufferedEndsAt)) {
+            return "is too close to existing event";
         }
         return null;
     }
@@ -593,6 +625,22 @@ public class SpecialistScheduleService {
         );
     }
 
+    private List<PublicScheduleUnavailableResponse> bookingBufferPublicResponses(
+            Booking booking,
+            OffsetDateTime from,
+            OffsetDateTime to
+    ) {
+        return bufferPublicResponses(
+                "booking-buffer-" + booking.getId(),
+                booking.getSpecialist(),
+                booking.getOffice(),
+                booking.getStartsAt(),
+                booking.getEndsAt(),
+                from,
+                to
+        );
+    }
+
     private PublicScheduleUnavailableResponse toFixedEventUnavailableResponse(FixedEvent event) {
         Office office = event.getOffice();
         User specialist = event.getSpecialist();
@@ -609,6 +657,65 @@ public class SpecialistScheduleService {
         );
     }
 
+    private List<PublicScheduleUnavailableResponse> fixedEventBufferPublicResponses(
+            FixedEvent event,
+            OffsetDateTime from,
+            OffsetDateTime to
+    ) {
+        return bufferPublicResponses(
+                "event-buffer-" + event.getId(),
+                event.getSpecialist(),
+                event.getOffice(),
+                event.getStartsAt(),
+                event.getEndsAt(),
+                from,
+                to
+        );
+    }
+
+    private List<PublicScheduleUnavailableResponse> bufferPublicResponses(
+            String idPrefix,
+            User specialist,
+            Office office,
+            OffsetDateTime startsAt,
+            OffsetDateTime endsAt,
+            OffsetDateTime from,
+            OffsetDateTime to
+    ) {
+        List<PublicScheduleUnavailableResponse> buffers = new ArrayList<>(2);
+        addBufferPublicResponse(buffers, idPrefix + "-before", specialist, office, startsAt.minusMinutes(appointmentBufferMinutes()), startsAt, from, to);
+        addBufferPublicResponse(buffers, idPrefix + "-after", specialist, office, endsAt, endsAt.plusMinutes(appointmentBufferMinutes()), from, to);
+        return buffers;
+    }
+
+    private void addBufferPublicResponse(
+            List<PublicScheduleUnavailableResponse> buffers,
+            String id,
+            User specialist,
+            Office office,
+            OffsetDateTime startsAt,
+            OffsetDateTime endsAt,
+            OffsetDateTime from,
+            OffsetDateTime to
+    ) {
+        OffsetDateTime clippedStartsAt = max(startsAt, from);
+        OffsetDateTime clippedEndsAt = min(endsAt, to);
+        if (!clippedEndsAt.isAfter(clippedStartsAt)) {
+            return;
+        }
+
+        buffers.add(new PublicScheduleUnavailableResponse(
+                id,
+                "BUFFER",
+                specialist.getId(),
+                specialistDisplayName(specialist),
+                office == null ? null : office.getId(),
+                office == null ? null : office.getName(),
+                clippedStartsAt,
+                clippedEndsAt
+        ));
+    }
+
     private List<PublicScheduleAvailabilityResponse> toPublicServiceSlots(
             SpecialistAvailabilityBlock block,
             ServiceOffering service,
@@ -622,12 +729,7 @@ public class SpecialistScheduleService {
         int durationMinutes = service.getDurationMinutes();
         OffsetDateTime blockStartsAt = max(block.getStartsAt(), from);
         OffsetDateTime blockEndsAt = min(block.getEndsAt(), to);
-        List<OffsetDateTime[]> bookedRanges = bookingRepository
-                .findActiveBookingsForAvailabilityBlock(block.getId(), blockStartsAt, blockEndsAt)
-                .stream()
-                .map(booking -> new OffsetDateTime[]{booking.getStartsAt(), booking.getEndsAt()})
-                .toList();
-        List<OffsetDateTime[]> occupiedRanges = new ArrayList<>(bookedRanges);
+        List<OffsetDateTime[]> occupiedRanges = new ArrayList<>(bookedRanges(block, blockStartsAt, blockEndsAt));
         occupiedRanges.addAll(blockedRanges(block, blockStartsAt, blockEndsAt));
         occupiedRanges.addAll(fixedEventRanges(block, blockStartsAt, blockEndsAt));
         List<PublicScheduleAvailabilityResponse> slots = new ArrayList<>();
@@ -657,12 +759,7 @@ public class SpecialistScheduleService {
     ) {
         OffsetDateTime blockStartsAt = max(block.getStartsAt(), from);
         OffsetDateTime blockEndsAt = min(block.getEndsAt(), to);
-        List<OffsetDateTime[]> occupiedRanges = new ArrayList<>();
-        occupiedRanges.addAll(bookingRepository
-                .findActiveBookingsForAvailabilityBlock(block.getId(), blockStartsAt, blockEndsAt)
-                .stream()
-                .map(booking -> new OffsetDateTime[]{booking.getStartsAt(), booking.getEndsAt()})
-                .toList());
+        List<OffsetDateTime[]> occupiedRanges = new ArrayList<>(bookedRanges(block, blockStartsAt, blockEndsAt));
         occupiedRanges.addAll(blockedRanges(block, blockStartsAt, blockEndsAt));
         occupiedRanges.addAll(fixedEventRanges(block, blockStartsAt, blockEndsAt));
         occupiedRanges.sort(java.util.Comparator.comparing(range -> range[0]));
@@ -701,8 +798,36 @@ public class SpecialistScheduleService {
         return fixedEventRepository
                 .findActiveOverlappingForSpecialist(block.getSpecialist().getId(), null, startsAt, endsAt)
                 .stream()
-                .map(event -> new OffsetDateTime[]{event.getStartsAt(), event.getEndsAt()})
+                .map(event -> bufferedRange(event.getStartsAt(), event.getEndsAt()))
                 .toList();
+    }
+
+    private List<OffsetDateTime[]> bookedRanges(
+            SpecialistAvailabilityBlock block,
+            OffsetDateTime startsAt,
+            OffsetDateTime endsAt
+    ) {
+        return bookingRepository
+                .findPublicOccupiedBookings(
+                        startsAt.minusMinutes(appointmentBufferMinutes()),
+                        endsAt.plusMinutes(appointmentBufferMinutes()),
+                        null,
+                        block.getSpecialist().getId()
+                )
+                .stream()
+                .map(booking -> bufferedRange(booking.getStartsAt(), booking.getEndsAt()))
+                .toList();
+    }
+
+    private OffsetDateTime[] bufferedRange(OffsetDateTime startsAt, OffsetDateTime endsAt) {
+        return new OffsetDateTime[]{
+                startsAt.minusMinutes(appointmentBufferMinutes()),
+                endsAt.plusMinutes(appointmentBufferMinutes())
+        };
+    }
+
+    private int appointmentBufferMinutes() {
+        return scheduleProps.getAppointmentBufferMinutes();
     }
 
     private List<OffsetDateTime[]> blockedRanges(

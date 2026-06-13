@@ -71,3 +71,5 @@ app:
       - image/webp
       - video/mp4
       - video/webm
+  schedule:
+    appointment-buffer-minutes: ${SCHEDULE_APPOINTMENT_BUFFER_MINUTES:30}

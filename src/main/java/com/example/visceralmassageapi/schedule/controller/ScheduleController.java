@@ -1,9 +1,11 @@
 package com.example.visceralmassageapi.schedule.controller;
 
+import com.example.visceralmassageapi.common.config.ScheduleProps;
 import com.example.visceralmassageapi.schedule.dto.PublicScheduleAvailabilityResponse;
 import com.example.visceralmassageapi.schedule.dto.FixedEventEnrollmentRequest;
 import com.example.visceralmassageapi.schedule.dto.PublicFixedEventResponse;
 import com.example.visceralmassageapi.schedule.dto.PublicScheduleUnavailableResponse;
+import com.example.visceralmassageapi.schedule.dto.ScheduleConfigResponse;
 import com.example.visceralmassageapi.schedule.service.FixedEventService;
 import com.example.visceralmassageapi.schedule.service.SpecialistScheduleService;
 import com.example.visceralmassageapi.services.dto.ServiceLocale;
@@ -29,6 +31,12 @@ public class ScheduleController {
 
     private final SpecialistScheduleService specialistScheduleService;
     private final FixedEventService fixedEventService;
+    private final ScheduleProps scheduleProps;
+
+    @GetMapping("/config")
+    public ScheduleConfigResponse config() {
+        return new ScheduleConfigResponse(scheduleProps.getAppointmentBufferMinutes());
+    }
 
     @GetMapping("/availability")
     public List<PublicScheduleAvailabilityResponse> listPublicAvailability(
