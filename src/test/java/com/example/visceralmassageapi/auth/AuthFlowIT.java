@@ -152,6 +152,47 @@ class AuthFlowIT extends IntegrationTestBase {
     }
 
     @Test
+    void userCanUpdateOwnProfileWithoutChangingContactOrRoles() throws Exception {
+        registerAndConfirm("""
+                {"phone":"+380000000032","email":"profile@example.com","firstName":"Iryna","lastName":"Koval","password":"Passw0rd!Secure"}
+                """, """
+                {"email":"profile@example.com","code":"%s"}
+                """, true);
+
+        var loginRes = mvc.perform(post("/api/auth/login").with(csrf())
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {"identifier":"profile@example.com","password":"Passw0rd!Secure"}
+                                """))
+                .andExpect(status().isOk())
+                .andReturn();
+
+        Cookie[] cookies = loginRes.getResponse().getCookies();
+
+        mvc.perform(put("/api/auth/me").with(csrf())
+                        .cookie(cookies)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {"firstName":"Олена","lastName":"Коваль  Нова","dateOfBirth":"1990-05-20"}
+                """))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.phone").value("+380000000032"))
+                .andExpect(jsonPath("$.email").value("profile@example.com"))
+                .andExpect(jsonPath("$.firstName").value("Олена"))
+                .andExpect(jsonPath("$.lastName").value("Коваль Нова"))
+                .andExpect(jsonPath("$.dateOfBirth").value("1990-05-20"))
+                .andExpect(jsonPath("$.roles[0]").value("USER"));
+
+        mvc.perform(put("/api/auth/me").with(csrf())
+                        .cookie(cookies)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {"firstName":"Олена","lastName":"Коваль","dateOfBirth":"2999-01-01"}
+                                """))
+                .andExpect(status().isBadRequest());
+    }
+
+    @Test
     void emailOnlyRegistration_canLoginByEmail() throws Exception {
         registerAndConfirm("""
                 {"phone":null,"email":"USER@EXAMPLE.COM","firstName":"Anna","lastName":"Lis","password":"Passw0rd!Secure"}

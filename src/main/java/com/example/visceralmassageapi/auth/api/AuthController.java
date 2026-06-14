@@ -3,6 +3,7 @@ package com.example.visceralmassageapi.auth.api;
 import com.example.visceralmassageapi.auth.dto.LoginRequest;
 import com.example.visceralmassageapi.auth.dto.PasswordRecoveryConfirmRequest;
 import com.example.visceralmassageapi.auth.dto.PasswordRecoveryRequest;
+import com.example.visceralmassageapi.auth.dto.ProfileUpdateRequest;
 import com.example.visceralmassageapi.auth.dto.RegisterConfirmRequest;
 import com.example.visceralmassageapi.auth.dto.RegisterRequest;
 import com.example.visceralmassageapi.auth.dto.UserDto;
@@ -101,12 +102,21 @@ public class AuthController {
 
     @GetMapping("/me")
     public UserDto me(Authentication authentication) {
+        return authService.me(currentUserId(authentication));
+    }
+
+    @PutMapping("/me")
+    public UserDto updateMe(Authentication authentication, @Valid @RequestBody ProfileUpdateRequest request) {
+        return authService.updateProfile(currentUserId(authentication), request);
+    }
+
+    private long currentUserId(Authentication authentication) {
         if (authentication == null || authentication.getPrincipal() == null) {
             throw new IllegalArgumentException("Not authenticated");
         }
-        long userId = (long) authentication.getPrincipal();
-        return authService.me(userId);
+        return (long) authentication.getPrincipal();
     }
+
     private String readCookie(HttpServletRequest req, String name) {
         Cookie[] cookies = req.getCookies();
         if (cookies == null) throw new IllegalArgumentException("No cookies");

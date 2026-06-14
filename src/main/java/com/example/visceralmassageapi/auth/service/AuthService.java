@@ -7,6 +7,7 @@ import com.example.visceralmassageapi.auth.domain.UserRole;
 import com.example.visceralmassageapi.auth.dto.LoginRequest;
 import com.example.visceralmassageapi.auth.dto.RegisterConfirmRequest;
 import com.example.visceralmassageapi.auth.dto.RegisterRequest;
+import com.example.visceralmassageapi.auth.dto.ProfileUpdateRequest;
 import com.example.visceralmassageapi.auth.dto.UserDto;
 import com.example.visceralmassageapi.auth.repo.RefreshTokenRepository;
 import com.example.visceralmassageapi.auth.repo.RegistrationVerificationTokenRepository;
@@ -379,6 +380,17 @@ public class AuthService {
                 .orElseThrow(() -> new NotFoundException("User not found"));
         return new UserDto(u.getId(), u.getPhone(), u.getEmail(),
                 u.getFirstName(), u.getLastName(), u.getDateOfBirth(), effectiveRoles(u));
+    }
+
+    @Transactional
+    public UserDto updateProfile(long userId, ProfileUpdateRequest request) {
+        User user = userRepository.findById(userId)
+                .orElseThrow(() -> new NotFoundException("User not found"));
+        user.setFirstName(normalizeName(request.getFirstName()));
+        user.setLastName(normalizeName(request.getLastName()));
+        user.setDateOfBirth(request.getDateOfBirth());
+        return new UserDto(user.getId(), user.getPhone(), user.getEmail(),
+                user.getFirstName(), user.getLastName(), user.getDateOfBirth(), effectiveRoles(user));
     }
 
     private static Set<UserRole> effectiveRoles(User user) {
