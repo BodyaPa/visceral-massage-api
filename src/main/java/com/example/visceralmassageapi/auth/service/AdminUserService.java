@@ -79,6 +79,7 @@ public class AdminUserService {
                 user.getEmail(),
                 user.getFirstName(),
                 user.getLastName(),
+                user.getDateOfBirth(),
                 user.isEnabled(),
                 orderedRoles(user.getRoles()),
                 user.getCreatedAt(),

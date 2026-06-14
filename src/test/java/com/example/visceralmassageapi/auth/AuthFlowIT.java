@@ -34,7 +34,7 @@ class AuthFlowIT extends IntegrationTestBase {
         mvc.perform(post("/api/auth/register").with(csrf())
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("""
-                                {"phone":null,"email":"register@example.com","firstName":"Iryna","lastName":"Koval","password":"Passw0rd!Secure"}
+                                {"phone":null,"email":"register@example.com","firstName":"Iryna","lastName":"Koval","dateOfBirth":"1992-04-15","password":"Passw0rd!Secure"}
                                 """))
                 .andExpect(status().isNoContent())
                 .andExpect(header().doesNotExist("Set-Cookie"));
@@ -56,6 +56,7 @@ class AuthFlowIT extends IntegrationTestBase {
                 .andExpect(header().stringValues("Set-Cookie", notNullValue()))
                 .andExpect(header().stringValues("Set-Cookie", everyItem(containsString("HttpOnly"))))
                 .andExpect(header().stringValues("Set-Cookie", everyItem(containsString("SameSite=Lax"))))
+                .andExpect(jsonPath("$.dateOfBirth").value("1992-04-15"))
                 .andExpect(jsonPath("$.roles[0]").value("USER"));
     }
 
@@ -75,6 +76,16 @@ class AuthFlowIT extends IntegrationTestBase {
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("""
                                 {"phone":"380000000011","email":null,"firstName":"Iryna","lastName":"Koval","password":"Passw0rd!"}
+                                """))
+                .andExpect(status().isBadRequest());
+    }
+
+    @Test
+    void register_rejectsFutureDateOfBirth() throws Exception {
+        mvc.perform(post("/api/auth/register").with(csrf())
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {"phone":"380000000016","email":null,"firstName":"Iryna","lastName":"Koval","dateOfBirth":"2999-01-01","password":"Passw0rd!Secure"}
                                 """))
                 .andExpect(status().isBadRequest());
     }

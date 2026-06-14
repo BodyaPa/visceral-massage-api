@@ -10,6 +10,7 @@ import jakarta.persistence.Table;
 import lombok.Getter;
 import lombok.Setter;
 
+import java.time.LocalDate;
 import java.time.OffsetDateTime;
 
 @Getter
@@ -33,6 +34,9 @@ public class RegistrationVerificationToken {
 
     @Column(name = "last_name", nullable = false, length = 50)
     private String lastName;
+
+    @Column(name = "date_of_birth")
+    private LocalDate dateOfBirth;
 
     @Column(name = "password_hash", nullable = false)
     private String passwordHash;

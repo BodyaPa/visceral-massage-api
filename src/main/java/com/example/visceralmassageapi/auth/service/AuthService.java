@@ -92,6 +92,7 @@ public class AuthService {
         token.setEmail(email);
         token.setFirstName(firstName);
         token.setLastName(lastName);
+        token.setDateOfBirth(req.getDateOfBirth());
         token.setPasswordHash(passwordEncoder.encode(req.getPassword()));
         token.setContactType(contact.type());
         token.setContactValue(contact.value());
@@ -146,6 +147,7 @@ public class AuthService {
         u.setEmail(token.getEmail());
         u.setFirstName(token.getFirstName());
         u.setLastName(token.getLastName());
+        u.setDateOfBirth(token.getDateOfBirth());
         u.setPasswordHash(token.getPasswordHash());
         u.getRoles().add(UserRole.USER);
         u.setEnabled(true);
@@ -368,7 +370,7 @@ public class AuthService {
     public record AuthResult(User user, ResponseCookie accessCookie, ResponseCookie refreshCookie) {
         public UserDto userDto() {
             return new UserDto(user.getId(), user.getPhone(), user.getEmail(),
-                    user.getFirstName(), user.getLastName(), effectiveRoles(user));
+                    user.getFirstName(), user.getLastName(), user.getDateOfBirth(), effectiveRoles(user));
         }
     }
 
@@ -376,7 +378,7 @@ public class AuthService {
         User u = userRepository.findById(userId)
                 .orElseThrow(() -> new NotFoundException("User not found"));
         return new UserDto(u.getId(), u.getPhone(), u.getEmail(),
-                u.getFirstName(), u.getLastName(), effectiveRoles(u));
+                u.getFirstName(), u.getLastName(), u.getDateOfBirth(), effectiveRoles(u));
     }
 
     private static Set<UserRole> effectiveRoles(User user) {

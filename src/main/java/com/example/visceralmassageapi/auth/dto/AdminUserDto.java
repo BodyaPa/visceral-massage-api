@@ -4,6 +4,7 @@ import com.example.visceralmassageapi.auth.domain.UserRole;
 import lombok.AllArgsConstructor;
 import lombok.Getter;
 
+import java.time.LocalDate;
 import java.time.OffsetDateTime;
 import java.util.Set;
 
@@ -15,6 +16,7 @@ public class AdminUserDto {
     private String email;
     private String firstName;
     private String lastName;
+    private LocalDate dateOfBirth;
     private boolean enabled;
     private Set<UserRole> roles;
     private OffsetDateTime createdAt;

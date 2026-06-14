@@ -4,6 +4,7 @@ import jakarta.persistence.*;
 import lombok.Getter;
 import lombok.Setter;
 
+import java.time.LocalDate;
 import java.time.OffsetDateTime;
 import java.util.HashSet;
 import java.util.Set;
@@ -29,6 +30,9 @@ public class User {
 
     @Column(name = "last_name", length = 50)
     private String lastName;
+
+    @Column(name = "date_of_birth")
+    private LocalDate dateOfBirth;
 
     @Column(name = "password_hash", nullable = false, length = 255)
     private String passwordHash;
