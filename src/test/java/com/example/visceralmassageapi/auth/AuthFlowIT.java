@@ -193,6 +193,115 @@ class AuthFlowIT extends IntegrationTestBase {
     }
 
     @Test
+    void userCanChangeEmailOnlyAfterConfirmingNewContactCode() throws Exception {
+        registerAndConfirm("""
+                {"phone":"+380000000033","email":"old-contact@example.com","firstName":"Iryna","lastName":"Koval","password":"Passw0rd!Secure"}
+                """, """
+                {"email":"old-contact@example.com","code":"%s"}
+                """, true);
+
+        var loginRes = mvc.perform(post("/api/auth/login").with(csrf())
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {"identifier":"old-contact@example.com","password":"Passw0rd!Secure"}
+                                """))
+                .andExpect(status().isOk())
+                .andReturn();
+
+        Cookie[] cookies = loginRes.getResponse().getCookies();
+        reset(notificationService);
+        mvc.perform(post("/api/auth/me/contact-change/request").with(csrf())
+                        .cookie(cookies)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {"email":"NEW-CONTACT@EXAMPLE.COM"}
+                                """))
+                .andExpect(status().isNoContent());
+
+        ArgumentCaptor<String> bodyCaptor = ArgumentCaptor.forClass(String.class);
+        verify(notificationService).sendEmail(
+                eq("new-contact@example.com"),
+                eq("Ataraksia contact change confirmation"),
+                bodyCaptor.capture()
+        );
+        String code = extractCode(bodyCaptor.getValue());
+
+        mvc.perform(post("/api/auth/me/contact-change/confirm").with(csrf())
+                        .cookie(cookies)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {"email":"new-contact@example.com","code":"%s"}
+                                """.formatted(code)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.phone").value("+380000000033"))
+                .andExpect(jsonPath("$.email").value("new-contact@example.com"))
+                .andExpect(jsonPath("$.roles[0]").value("USER"));
+
+        mvc.perform(post("/api/auth/login").with(csrf())
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {"identifier":"old-contact@example.com","password":"Passw0rd!Secure"}
+                                """))
+                .andExpect(status().isBadRequest());
+
+        mvc.perform(post("/api/auth/login").with(csrf())
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {"identifier":"new-contact@example.com","password":"Passw0rd!Secure"}
+                                """))
+                .andExpect(status().isOk());
+    }
+
+    @Test
+    void userCanChangePasswordWithCurrentPassword() throws Exception {
+        registerAndConfirm("""
+                {"phone":"+380000000034","email":"password-change@example.com","firstName":"Iryna","lastName":"Koval","password":"Passw0rd!Secure"}
+                """, """
+                {"email":"password-change@example.com","code":"%s"}
+                """, true);
+
+        var loginRes = mvc.perform(post("/api/auth/login").with(csrf())
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {"identifier":"password-change@example.com","password":"Passw0rd!Secure"}
+                                """))
+                .andExpect(status().isOk())
+                .andReturn();
+        Cookie[] cookies = loginRes.getResponse().getCookies();
+
+        mvc.perform(post("/api/auth/me/password").with(csrf())
+                        .cookie(cookies)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {"currentPassword":"WrongPassw0rd!Secure","newPassword":"NewPassw0rd!Secure"}
+                                """))
+                .andExpect(status().isBadRequest());
+
+        mvc.perform(post("/api/auth/me/password").with(csrf())
+                        .cookie(cookies)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {"currentPassword":"Passw0rd!Secure","newPassword":"NewPassw0rd!Secure"}
+                                """))
+                .andExpect(status().isNoContent())
+                .andExpect(header().stringValues("Set-Cookie", notNullValue()));
+
+        mvc.perform(post("/api/auth/login").with(csrf())
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {"identifier":"password-change@example.com","password":"Passw0rd!Secure"}
+                                """))
+                .andExpect(status().isBadRequest());
+
+        mvc.perform(post("/api/auth/login").with(csrf())
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {"identifier":"password-change@example.com","password":"NewPassw0rd!Secure"}
+                                """))
+                .andExpect(status().isOk());
+    }
+
+    @Test
     void emailOnlyRegistration_canLoginByEmail() throws Exception {
         registerAndConfirm("""
                 {"phone":null,"email":"USER@EXAMPLE.COM","firstName":"Anna","lastName":"Lis","password":"Passw0rd!Secure"}

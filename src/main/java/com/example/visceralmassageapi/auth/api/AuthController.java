@@ -1,6 +1,9 @@
 package com.example.visceralmassageapi.auth.api;
 
+import com.example.visceralmassageapi.auth.dto.ContactChangeConfirmRequest;
+import com.example.visceralmassageapi.auth.dto.ContactChangeRequest;
 import com.example.visceralmassageapi.auth.dto.LoginRequest;
+import com.example.visceralmassageapi.auth.dto.PasswordChangeRequest;
 import com.example.visceralmassageapi.auth.dto.PasswordRecoveryConfirmRequest;
 import com.example.visceralmassageapi.auth.dto.PasswordRecoveryRequest;
 import com.example.visceralmassageapi.auth.dto.ProfileUpdateRequest;
@@ -108,6 +111,35 @@ public class AuthController {
     @PutMapping("/me")
     public UserDto updateMe(Authentication authentication, @Valid @RequestBody ProfileUpdateRequest request) {
         return authService.updateProfile(currentUserId(authentication), request);
+    }
+
+    @PostMapping("/me/contact-change/request")
+    public ResponseEntity<Void> requestContactChange(
+            Authentication authentication,
+            @Valid @RequestBody ContactChangeRequest request
+    ) {
+        authService.requestContactChange(currentUserId(authentication), request);
+        return ResponseEntity.noContent().build();
+    }
+
+    @PostMapping("/me/contact-change/confirm")
+    public UserDto confirmContactChange(
+            Authentication authentication,
+            @Valid @RequestBody ContactChangeConfirmRequest request
+    ) {
+        return authService.confirmContactChange(currentUserId(authentication), request);
+    }
+
+    @PostMapping("/me/password")
+    public ResponseEntity<Void> changePassword(
+            Authentication authentication,
+            @Valid @RequestBody PasswordChangeRequest request
+    ) {
+        authService.changePassword(currentUserId(authentication), request);
+        return ResponseEntity.noContent()
+                .header(HttpHeaders.SET_COOKIE, authService.clearAccessCookie().toString())
+                .header(HttpHeaders.SET_COOKIE, authService.clearRefreshCookie().toString())
+                .build();
     }
 
     private long currentUserId(Authentication authentication) {

@@ -1,14 +1,19 @@
 package com.example.visceralmassageapi.auth.service;
 
+import com.example.visceralmassageapi.auth.domain.ContactChangeToken;
 import com.example.visceralmassageapi.auth.domain.RefreshToken;
 import com.example.visceralmassageapi.auth.domain.RegistrationVerificationToken;
 import com.example.visceralmassageapi.auth.domain.User;
 import com.example.visceralmassageapi.auth.domain.UserRole;
+import com.example.visceralmassageapi.auth.dto.ContactChangeConfirmRequest;
+import com.example.visceralmassageapi.auth.dto.ContactChangeRequest;
 import com.example.visceralmassageapi.auth.dto.LoginRequest;
+import com.example.visceralmassageapi.auth.dto.PasswordChangeRequest;
 import com.example.visceralmassageapi.auth.dto.RegisterConfirmRequest;
 import com.example.visceralmassageapi.auth.dto.RegisterRequest;
 import com.example.visceralmassageapi.auth.dto.ProfileUpdateRequest;
 import com.example.visceralmassageapi.auth.dto.UserDto;
+import com.example.visceralmassageapi.auth.repo.ContactChangeTokenRepository;
 import com.example.visceralmassageapi.auth.repo.RefreshTokenRepository;
 import com.example.visceralmassageapi.auth.repo.RegistrationVerificationTokenRepository;
 import com.example.visceralmassageapi.auth.repo.UserRepository;
@@ -47,11 +52,17 @@ public class AuthService {
     private static final int MAX_REGISTRATION_CONFIRM_ATTEMPTS = 5;
     private static final int MAX_REGISTRATION_REQUESTS_PER_WINDOW = 3;
     private static final int REGISTRATION_REQUEST_WINDOW_MINUTES = 15;
+    private static final int CONTACT_CHANGE_CODE_TTL_MINUTES = 15;
+    private static final int CONTACT_CHANGE_REQUEST_WINDOW_MINUTES = 15;
+    private static final int MAX_CONTACT_CHANGE_REQUESTS_PER_WINDOW = 3;
+    private static final int MAX_CONTACT_CHANGE_CONFIRM_ATTEMPTS = 5;
     private static final String GENERIC_INVALID_REGISTRATION_CODE = "Invalid or expired registration code";
+    private static final String GENERIC_INVALID_CONTACT_CHANGE_CODE = "Invalid or expired contact change code";
 
     private final UserRepository userRepository;
     private final RefreshTokenRepository refreshTokenRepository;
     private final RegistrationVerificationTokenRepository registrationTokenRepository;
+    private final ContactChangeTokenRepository contactChangeTokenRepository;
     private final PasswordEncoder passwordEncoder;
     private final JwtService jwtService;
     private final CookieProps cookieProps;
@@ -208,6 +219,97 @@ public class AuthService {
                 .ifPresent(token -> token.setRevokedAt(OffsetDateTime.now()));
     }
 
+    @Transactional
+    public void requestContactChange(long userId, ContactChangeRequest request) {
+        User user = userRepository.findById(userId)
+                .orElseThrow(() -> new NotFoundException("User not found"));
+        RegistrationContact contact = registrationContact(normalizeEmail(request.getEmail()), normalizeOptionalPhone(request.getPhone()));
+        ensureContactCanBeAssigned(user, contact);
+
+        OffsetDateTime now = OffsetDateTime.now();
+        long recentRequests = contactChangeTokenRepository.countByUserIdAndContactTypeAndContactValueAndCreatedAtAfter(
+                userId,
+                contact.type(),
+                contact.value(),
+                now.minusMinutes(CONTACT_CHANGE_REQUEST_WINDOW_MINUTES)
+        );
+        if (recentRequests >= MAX_CONTACT_CHANGE_REQUESTS_PER_WINDOW) {
+            throw new BadRequestException("Too many contact change requests");
+        }
+
+        String code = generateCode();
+        String salt = generateSalt();
+
+        ContactChangeToken token = new ContactChangeToken();
+        token.setUser(user);
+        token.setContactType(contact.type());
+        token.setContactValue(contact.value());
+        token.setCodeSalt(salt);
+        token.setCodeHash(hashCode(salt, code));
+        token.setExpiresAt(now.plusMinutes(CONTACT_CHANGE_CODE_TTL_MINUTES));
+        contactChangeTokenRepository.save(token);
+
+        if (contact.type().equals("EMAIL")) {
+            notificationService.sendEmail(
+                    contact.value(),
+                    "Ataraksia contact change confirmation",
+                    "Your Ataraksia contact change code is: %s%nIt expires in %d minutes.".formatted(code, CONTACT_CHANGE_CODE_TTL_MINUTES)
+            );
+            return;
+        }
+
+        notificationService.sendSms(
+                contact.value(),
+                "Ataraksia contact change code: %s. Expires in %d minutes.".formatted(code, CONTACT_CHANGE_CODE_TTL_MINUTES)
+        );
+    }
+
+    @Transactional
+    public UserDto confirmContactChange(long userId, ContactChangeConfirmRequest request) {
+        User user = userRepository.findById(userId)
+                .orElseThrow(() -> new NotFoundException("User not found"));
+        RegistrationContact contact = registrationContact(normalizeEmail(request.getEmail()), normalizeOptionalPhone(request.getPhone()));
+        OffsetDateTime now = OffsetDateTime.now();
+        ContactChangeToken token = contactChangeTokenRepository
+                .findFirstByUserIdAndContactTypeAndContactValueAndUsedAtIsNullAndExpiresAtAfterOrderByCreatedAtDesc(
+                        userId,
+                        contact.type(),
+                        contact.value(),
+                        now
+                )
+                .orElseThrow(() -> new BadRequestException(GENERIC_INVALID_CONTACT_CHANGE_CODE));
+
+        if (token.getAttempts() >= MAX_CONTACT_CHANGE_CONFIRM_ATTEMPTS) {
+            throw new BadRequestException(GENERIC_INVALID_CONTACT_CHANGE_CODE);
+        }
+
+        token.setAttempts(token.getAttempts() + 1);
+        if (!hashCode(token.getCodeSalt(), request.getCode()).equals(token.getCodeHash())) {
+            throw new BadRequestException(GENERIC_INVALID_CONTACT_CHANGE_CODE);
+        }
+
+        ensureContactCanBeAssigned(user, contact);
+        if (contact.type().equals("EMAIL")) {
+            user.setEmail(contact.value());
+        } else {
+            user.setPhone(contact.value());
+        }
+        token.setUsedAt(now);
+        return new UserDto(user.getId(), user.getPhone(), user.getEmail(),
+                user.getFirstName(), user.getLastName(), user.getDateOfBirth(), effectiveRoles(user));
+    }
+
+    @Transactional
+    public void changePassword(long userId, PasswordChangeRequest request) {
+        User user = userRepository.findById(userId)
+                .orElseThrow(() -> new NotFoundException("User not found"));
+        if (!user.isEnabled() || !passwordEncoder.matches(request.getCurrentPassword(), user.getPasswordHash())) {
+            throw new BadRequestException("Invalid current password");
+        }
+        user.setPasswordHash(passwordEncoder.encode(request.getNewPassword()));
+        refreshTokenRepository.revokeActiveTokensForUser(user.getId(), OffsetDateTime.now());
+    }
+
     public ResponseCookie buildAccessCookie(String token) {
         return baseCookie(ACCESS_COOKIE, token, jwtService.getAccessTtlSeconds());
     }
@@ -354,6 +456,25 @@ public class AuthService {
 
     private String normalizeName(String name) {
         return name.trim().replaceAll("\\s+", " ");
+    }
+
+    private void ensureContactCanBeAssigned(User user, RegistrationContact contact) {
+        if (contact.type().equals("EMAIL")) {
+            if (contact.value().equals(user.getEmail())) {
+                throw new BadRequestException("Contact is already assigned to this account");
+            }
+            if (userRepository.existsByEmail(contact.value())) {
+                throw new BadRequestException("Contact already registered");
+            }
+            return;
+        }
+
+        if (contact.value().equals(user.getPhone())) {
+            throw new BadRequestException("Contact is already assigned to this account");
+        }
+        if (userRepository.existsByPhone(contact.value())) {
+            throw new BadRequestException("Contact already registered");
+        }
     }
 
     private RegistrationContact registrationContact(String email, String phone) {
