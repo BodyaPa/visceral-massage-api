@@ -13,10 +13,9 @@ public class OfficeResponse {
     private String name;
     private String address;
     private boolean active;
-    private String phone;
-    private String email;
     private String locationDetails;
     private String directions;
+    private String googleMapsUrl;
     private UUID photoMediaId;
     private String photoMediaUrl;
     private UUID videoMediaId;

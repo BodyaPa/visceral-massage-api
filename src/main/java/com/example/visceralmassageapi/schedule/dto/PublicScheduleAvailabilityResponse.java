@@ -11,6 +11,7 @@ public record PublicScheduleAvailabilityResponse(
         String officeName,
         String officeAddress,
         String officeDirections,
+        String officeGoogleMapsUrl,
         UUID officePhotoMediaId,
         String officePhotoMediaUrl,
         UUID officeVideoMediaId,

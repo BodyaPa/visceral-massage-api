@@ -13,9 +13,7 @@ public interface OfficeRepository extends JpaRepository<Office, Long> {
             FROM Office office
             WHERE (:query IS NULL
                 OR LOWER(office.name) LIKE :query
-                OR LOWER(office.address) LIKE :query
-                OR LOWER(COALESCE(office.phone, '')) LIKE :query
-                OR LOWER(COALESCE(office.email, '')) LIKE :query)
+                OR LOWER(office.address) LIKE :query)
             AND (:active IS NULL OR office.active = :active)
             """,
             countQuery = """
@@ -23,9 +21,7 @@ public interface OfficeRepository extends JpaRepository<Office, Long> {
             FROM Office office
             WHERE (:query IS NULL
                 OR LOWER(office.name) LIKE :query
-                OR LOWER(office.address) LIKE :query
-                OR LOWER(COALESCE(office.phone, '')) LIKE :query
-                OR LOWER(COALESCE(office.email, '')) LIKE :query)
+                OR LOWER(office.address) LIKE :query)
             AND (:active IS NULL OR office.active = :active)
             """)
     Page<Office> search(String query, Boolean active, Pageable pageable);

@@ -50,15 +50,16 @@ class AdminOfficeManagementIT extends IntegrationTestBase {
                                   "name":"Office 1",
                                   "address":"Kyiv, Central Street 1",
                                   "active":true,
-                                  "phone":"+380441112233",
-                                  "email":"OFFICE@EXAMPLE.COM",
-                                  "directions":"Use entrance B and follow signs to room 204."
+                                  "directions":"Use entrance B and follow signs to room 204.",
+                                  "googleMapsUrl":"https://maps.google.com/?q=Office+1"
                                 }
                                 """))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.name").value("Office 1"))
-                .andExpect(jsonPath("$.email").value("office@example.com"))
+                .andExpect(jsonPath("$.phone").doesNotExist())
+                .andExpect(jsonPath("$.email").doesNotExist())
                 .andExpect(jsonPath("$.directions").value("Use entrance B and follow signs to room 204."))
+                .andExpect(jsonPath("$.googleMapsUrl").value("https://maps.google.com/?q=Office+1"))
                 .andExpect(jsonPath("$.photoMediaId").doesNotExist())
                 .andExpect(jsonPath("$.videoMediaId").doesNotExist())
                 .andReturn();
@@ -90,16 +91,17 @@ class AdminOfficeManagementIT extends IntegrationTestBase {
                                   "name":"Office 1 Renovated",
                                   "address":"Kyiv, Central Street 2",
                                   "active":false,
-                                  "phone":null,
-                                  "email":null,
-                                  "directions":"Call from the courtyard gate."
+                                  "directions":"Call from the courtyard gate.",
+                                  "googleMapsUrl":"https://maps.google.com/?q=Office+1+Renovated"
                                 }
                                 """))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.name").value("Office 1 Renovated"))
                 .andExpect(jsonPath("$.active").value(false))
                 .andExpect(jsonPath("$.phone").doesNotExist())
+                .andExpect(jsonPath("$.email").doesNotExist())
                 .andExpect(jsonPath("$.directions").value("Call from the courtyard gate."))
+                .andExpect(jsonPath("$.googleMapsUrl").value("https://maps.google.com/?q=Office+1+Renovated"))
                 .andExpect(jsonPath("$.photoMediaId").doesNotExist())
                 .andExpect(jsonPath("$.videoMediaId").doesNotExist());
     }
@@ -184,8 +186,6 @@ class AdminOfficeManagementIT extends IntegrationTestBase {
                                   "name":"%s",
                                   "address":"Kyiv",
                                   "active":%s,
-                                  "phone":null,
-                                  "email":null,
                                   "locationDetails":null
                                 }
                                 """.formatted(name, active)))

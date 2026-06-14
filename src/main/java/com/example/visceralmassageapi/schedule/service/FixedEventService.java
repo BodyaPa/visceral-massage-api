@@ -371,6 +371,7 @@ public class FixedEventService {
                 office == null ? null : office.getName(),
                 office == null ? null : office.getAddress(),
                 office == null ? null : visibleDirections(office),
+                office == null ? null : office.getGoogleMapsUrl(),
                 office == null ? null : office.getPhotoMediaId(),
                 mediaUrl(office, office == null ? null : office.getPhotoMediaId()),
                 office == null ? null : office.getVideoMediaId(),

@@ -1,7 +1,7 @@
 package com.example.visceralmassageapi.offices.dto;
 
-import jakarta.validation.constraints.Email;
 import jakarta.validation.constraints.NotBlank;
+import jakarta.validation.constraints.Pattern;
 import jakarta.validation.constraints.Size;
 import lombok.Getter;
 import lombok.Setter;
@@ -21,18 +21,15 @@ public class OfficeRequest {
 
     private boolean active = true;
 
-    @Size(max = 32)
-    private String phone;
-
-    @Email
-    @Size(max = 255)
-    private String email;
-
     @Size(max = 2000)
     private String locationDetails;
 
     @Size(max = 4000)
     private String directions;
+
+    @Size(max = 2048)
+    @Pattern(regexp = "^https?://.+$", message = "must be an http(s) URL")
+    private String googleMapsUrl;
 
     private UUID photoMediaId;
 

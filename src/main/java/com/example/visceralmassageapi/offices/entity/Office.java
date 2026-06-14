@@ -26,17 +26,14 @@ public class Office {
     @Column(nullable = false)
     private boolean active = true;
 
-    @Column(length = 32)
-    private String phone;
-
-    @Column(length = 255)
-    private String email;
-
     @Column(name = "location_details", columnDefinition = "TEXT")
     private String locationDetails;
 
     @Column(columnDefinition = "TEXT")
     private String directions;
+
+    @Column(name = "google_maps_url", length = 2048)
+    private String googleMapsUrl;
 
     @Column(name = "photo_media_id")
     private UUID photoMediaId;

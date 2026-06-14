@@ -68,10 +68,9 @@ public class OfficeService {
         office.setName(normalizeRequired(request.getName()));
         office.setAddress(normalizeRequired(request.getAddress()));
         office.setActive(request.isActive());
-        office.setPhone(normalizeOptional(request.getPhone()));
-        office.setEmail(normalizeEmail(request.getEmail()));
         office.setLocationDetails(normalizeOptional(request.getLocationDetails()));
         office.setDirections(normalizeOptionalLongText(request.getDirections()));
+        office.setGoogleMapsUrl(normalizeOptional(request.getGoogleMapsUrl()));
         office.setPhotoMediaId(request.getPhotoMediaId());
         office.setVideoMediaId(request.getVideoMediaId());
     }
@@ -85,13 +84,6 @@ public class OfficeService {
             return null;
         }
         return value.trim().replaceAll("\\s+", " ");
-    }
-
-    private String normalizeEmail(String value) {
-        if (value == null || value.isBlank()) {
-            return null;
-        }
-        return value.trim().toLowerCase(Locale.ROOT);
     }
 
     private String normalizeOptionalLongText(String value) {
@@ -114,10 +106,9 @@ public class OfficeService {
                 office.getName(),
                 office.getAddress(),
                 office.isActive(),
-                office.getPhone(),
-                office.getEmail(),
                 office.getLocationDetails(),
                 visibleDirections(office),
+                office.getGoogleMapsUrl(),
                 office.getPhotoMediaId(),
                 mediaUrl(office, office.getPhotoMediaId()),
                 office.getVideoMediaId(),
