@@ -18,6 +18,7 @@ import org.springframework.transaction.annotation.Transactional;
 import java.math.BigDecimal;
 import java.time.Duration;
 import java.time.OffsetDateTime;
+import java.time.temporal.ChronoUnit;
 import java.util.List;
 
 import static com.example.visceralmassageapi.booking.repository.BookingSpecifications.specialistFinanceFilter;
@@ -25,6 +26,8 @@ import static com.example.visceralmassageapi.booking.repository.BookingSpecifica
 @Service
 @RequiredArgsConstructor
 public class SpecialistFinanceOverviewService {
+
+    private static final long MAX_QUERY_DAYS = 93;
 
     private final BookingRepository bookingRepository;
     private final SpecialistFinanceSettingsRepository settingsRepository;
@@ -86,6 +89,10 @@ public class SpecialistFinanceOverviewService {
     private void validateRange(OffsetDateTime from, OffsetDateTime to) {
         if (from != null && to != null && !to.isAfter(from)) {
             throw new BadRequestException("Booking range is invalid");
+        }
+
+        if (from != null && to != null && ChronoUnit.DAYS.between(from, to) > MAX_QUERY_DAYS) {
+            throw new BadRequestException("Booking range is too large");
         }
     }
 

@@ -555,6 +555,12 @@ class BookingFlowIT extends IntegrationTestBase {
 
         mvc.perform(get("/api/specialist/finance/overview")
                         .cookie(specialistCookies)
+                        .param("from", "2035-01-01T00:00:00Z")
+                        .param("to", "2035-06-01T00:00:00Z"))
+                .andExpect(status().isBadRequest());
+
+        mvc.perform(get("/api/specialist/finance/overview")
+                        .cookie(specialistCookies)
                         .param("from", "2035-05-01T00:00:00Z")
                         .param("to", "2035-06-01T00:00:00Z"))
                 .andExpect(status().isOk())
