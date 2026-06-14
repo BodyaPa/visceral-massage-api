@@ -27,6 +27,8 @@ public interface MediaService {
 
     MediaContent loadPublishedContent(Integer newsId, UUID id);
 
+    MediaContent loadOfficeContent(Long officeId, UUID id);
+
     void delete(UUID id);
 
     record MediaContent(MediaAssetResponse asset, Resource content) {

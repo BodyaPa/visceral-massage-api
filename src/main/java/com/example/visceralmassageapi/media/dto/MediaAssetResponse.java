@@ -9,6 +9,7 @@ public record MediaAssetResponse(
         String contentType,
         long sizeBytes,
         Integer newsId,
+        Long officeId,
         OffsetDateTime createdAt
 ) {
 }

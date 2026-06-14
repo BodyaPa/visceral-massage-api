@@ -3,6 +3,7 @@ package com.example.visceralmassageapi.booking.dto;
 import com.example.visceralmassageapi.booking.domain.BookingStatus;
 
 import java.time.OffsetDateTime;
+import java.util.UUID;
 
 public record BookingResponse(
         long id,
@@ -16,9 +17,10 @@ public record BookingResponse(
         String officeName,
         String officeAddress,
         String officeDirections,
-        String officePhotoUrl,
-        String officeVideoUrl,
-        String officeGoogleMapsUrl,
+        UUID officePhotoMediaId,
+        String officePhotoMediaUrl,
+        UUID officeVideoMediaId,
+        String officeVideoMediaUrl,
         OffsetDateTime startsAt,
         OffsetDateTime endsAt,
         boolean reminderOptIn,

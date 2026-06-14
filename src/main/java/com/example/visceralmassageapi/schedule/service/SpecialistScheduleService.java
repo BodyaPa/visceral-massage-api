@@ -590,9 +590,10 @@ public class SpecialistScheduleService {
                 office == null ? null : office.getName(),
                 office == null ? null : office.getAddress(),
                 office == null ? null : visibleDirections(office),
-                office == null ? null : office.getPhotoUrl(),
-                office == null ? null : office.getVideoUrl(),
-                office == null ? null : office.getGoogleMapsUrl(),
+                office == null ? null : office.getPhotoMediaId(),
+                mediaUrl(office, office == null ? null : office.getPhotoMediaId()),
+                office == null ? null : office.getVideoMediaId(),
+                mediaUrl(office, office == null ? null : office.getVideoMediaId()),
                 block.getStartsAt(),
                 block.getEndsAt()
         );
@@ -869,9 +870,10 @@ public class SpecialistScheduleService {
                 office == null ? null : office.getName(),
                 office == null ? null : office.getAddress(),
                 office == null ? null : visibleDirections(office),
-                office == null ? null : office.getPhotoUrl(),
-                office == null ? null : office.getVideoUrl(),
-                office == null ? null : office.getGoogleMapsUrl(),
+                office == null ? null : office.getPhotoMediaId(),
+                mediaUrl(office, office == null ? null : office.getPhotoMediaId()),
+                office == null ? null : office.getVideoMediaId(),
+                mediaUrl(office, office == null ? null : office.getVideoMediaId()),
                 startsAt,
                 endsAt
         );
@@ -879,6 +881,13 @@ public class SpecialistScheduleService {
 
     private String visibleDirections(Office office) {
         return office.getDirections() == null ? office.getLocationDetails() : office.getDirections();
+    }
+
+    private String mediaUrl(Office office, java.util.UUID mediaId) {
+        if (office == null || mediaId == null) {
+            return null;
+        }
+        return "/api/offices/" + office.getId() + "/media/" + mediaId + "/content";
     }
 
     private boolean overlapsAny(OffsetDateTime startsAt, OffsetDateTime endsAt, List<OffsetDateTime[]> ranges) {

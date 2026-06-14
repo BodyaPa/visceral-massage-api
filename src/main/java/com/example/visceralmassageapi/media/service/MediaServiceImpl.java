@@ -10,6 +10,7 @@ import com.example.visceralmassageapi.media.repository.MediaAssetRepository;
 import com.example.visceralmassageapi.media.storage.MediaFileStorage;
 import com.example.visceralmassageapi.news.exception.NewsNotFoundException;
 import com.example.visceralmassageapi.news.repository.NewsRepository;
+import com.example.visceralmassageapi.offices.repository.OfficeRepository;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.http.MediaType;
@@ -42,13 +43,15 @@ public class MediaServiceImpl implements MediaService {
     private final MediaFileStorage fileStorage;
     private final MediaProps properties;
     private final NewsRepository newsRepository;
+    private final OfficeRepository officeRepository;
 
     public MediaServiceImpl(MediaAssetRepository repository, MediaFileStorage fileStorage, MediaProps properties,
-                            NewsRepository newsRepository) {
+                            NewsRepository newsRepository, OfficeRepository officeRepository) {
         this.repository = repository;
         this.fileStorage = fileStorage;
         this.properties = properties;
         this.newsRepository = newsRepository;
+        this.officeRepository = officeRepository;
     }
 
     @Override
@@ -134,11 +137,25 @@ public class MediaServiceImpl implements MediaService {
     }
 
     @Override
+    public MediaContent loadOfficeContent(Long officeId, UUID id) {
+        var office = officeRepository.findById(officeId)
+                .orElseThrow(() -> new MediaAssetNotFoundException(id));
+        if (!id.equals(office.getPhotoMediaId()) && !id.equals(office.getVideoMediaId())) {
+            throw new MediaAssetNotFoundException(id);
+        }
+        MediaAsset asset = requireAsset(id);
+        return new MediaContent(toResponse(asset), fileStorage.load(asset.getStorageKey()));
+    }
+
+    @Override
     @Transactional
     public void delete(UUID id) {
         MediaAsset asset = requireAsset(id);
         if (asset.getNewsId() != null) {
             throw new BadRequestException("Linked media asset must be detached before deletion");
+        }
+        if (asset.getOfficeId() != null) {
+            throw new BadRequestException("Office media asset must be detached before deletion");
         }
         fileStorage.delete(asset.getStorageKey());
         repository.delete(asset);
@@ -246,6 +263,7 @@ public class MediaServiceImpl implements MediaService {
                 asset.getContentType(),
                 asset.getSizeBytes(),
                 asset.getNewsId(),
+                asset.getOfficeId(),
                 asset.getCreatedAt()
         );
     }

@@ -10,5 +10,7 @@ import java.util.UUID;
 public interface MediaAssetRepository extends JpaRepository<MediaAsset, UUID> {
     List<MediaAsset> findAllByNewsIdOrderByCreatedAtAsc(Integer newsId);
 
+    List<MediaAsset> findAllByOfficeIdOrderByCreatedAtAsc(Long officeId);
+
     Optional<MediaAsset> findByIdAndNewsId(UUID id, Integer newsId);
 }

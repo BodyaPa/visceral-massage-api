@@ -1,6 +1,10 @@
 package com.example.visceralmassageapi.offices.service;
 
 import com.example.visceralmassageapi.common.exception.NotFoundException;
+import com.example.visceralmassageapi.common.exception.BadRequestException;
+import com.example.visceralmassageapi.media.entity.MediaAsset;
+import com.example.visceralmassageapi.media.exception.MediaAssetNotFoundException;
+import com.example.visceralmassageapi.media.repository.MediaAssetRepository;
 import com.example.visceralmassageapi.offices.dto.OfficeRequest;
 import com.example.visceralmassageapi.offices.dto.OfficeResponse;
 import com.example.visceralmassageapi.offices.entity.Office;
@@ -12,12 +16,14 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.util.Locale;
+import java.util.UUID;
 
 @Service
 @RequiredArgsConstructor
 public class OfficeService {
 
     private final OfficeRepository officeRepository;
+    private final MediaAssetRepository mediaAssetRepository;
 
     @Transactional(readOnly = true)
     public Page<OfficeResponse> list(String query, Boolean active, Pageable pageable) {
@@ -40,13 +46,16 @@ public class OfficeService {
     public OfficeResponse create(OfficeRequest request) {
         Office office = new Office();
         apply(office, request);
-        return toResponse(officeRepository.save(office));
+        Office saved = officeRepository.save(office);
+        linkOfficeMedia(saved);
+        return toResponse(saved);
     }
 
     @Transactional
     public OfficeResponse update(long id, OfficeRequest request) {
         Office office = requireOffice(id);
         apply(office, request);
+        linkOfficeMedia(office);
         return toResponse(office);
     }
 
@@ -63,9 +72,8 @@ public class OfficeService {
         office.setEmail(normalizeEmail(request.getEmail()));
         office.setLocationDetails(normalizeOptional(request.getLocationDetails()));
         office.setDirections(normalizeOptionalLongText(request.getDirections()));
-        office.setPhotoUrl(normalizeOptional(request.getPhotoUrl()));
-        office.setVideoUrl(normalizeOptional(request.getVideoUrl()));
-        office.setGoogleMapsUrl(normalizeOptional(request.getGoogleMapsUrl()));
+        office.setPhotoMediaId(request.getPhotoMediaId());
+        office.setVideoMediaId(request.getVideoMediaId());
     }
 
     private String normalizeRequired(String value) {
@@ -110,9 +118,10 @@ public class OfficeService {
                 office.getEmail(),
                 office.getLocationDetails(),
                 visibleDirections(office),
-                office.getPhotoUrl(),
-                office.getVideoUrl(),
-                office.getGoogleMapsUrl(),
+                office.getPhotoMediaId(),
+                mediaUrl(office, office.getPhotoMediaId()),
+                office.getVideoMediaId(),
+                mediaUrl(office, office.getVideoMediaId()),
                 office.getCreatedAt(),
                 office.getUpdatedAt()
         );
@@ -120,5 +129,35 @@ public class OfficeService {
 
     private String visibleDirections(Office office) {
         return office.getDirections() == null ? office.getLocationDetails() : office.getDirections();
+    }
+
+    private void linkOfficeMedia(Office office) {
+        linkMedia(office.getPhotoMediaId(), office.getId(), "image/");
+        linkMedia(office.getVideoMediaId(), office.getId(), "video/");
+    }
+
+    private void linkMedia(UUID mediaId, Long officeId, String contentTypePrefix) {
+        if (mediaId == null) {
+            return;
+        }
+        MediaAsset asset = mediaAssetRepository.findById(mediaId)
+                .orElseThrow(() -> new MediaAssetNotFoundException(mediaId));
+        if (asset.getNewsId() != null) {
+            throw new BadRequestException("Media asset is already linked to news");
+        }
+        if (asset.getOfficeId() != null && !asset.getOfficeId().equals(officeId)) {
+            throw new BadRequestException("Media asset is already linked to another office");
+        }
+        if (!asset.getContentType().startsWith(contentTypePrefix)) {
+            throw new BadRequestException("Office media type does not match the selected field");
+        }
+        asset.setOfficeId(officeId);
+    }
+
+    private String mediaUrl(Office office, UUID mediaId) {
+        if (mediaId == null) {
+            return null;
+        }
+        return "/api/offices/" + office.getId() + "/media/" + mediaId + "/content";
     }
 }

@@ -2,6 +2,7 @@ package com.example.visceralmassageapi.schedule.dto;
 
 import java.math.BigDecimal;
 import java.time.OffsetDateTime;
+import java.util.UUID;
 
 public record PublicFixedEventResponse(
         long id,
@@ -14,9 +15,10 @@ public record PublicFixedEventResponse(
         String officeName,
         String officeAddress,
         String officeDirections,
-        String officePhotoUrl,
-        String officeVideoUrl,
-        String officeGoogleMapsUrl,
+        UUID officePhotoMediaId,
+        String officePhotoMediaUrl,
+        UUID officeVideoMediaId,
+        String officeVideoMediaUrl,
         OffsetDateTime startsAt,
         OffsetDateTime endsAt,
         int capacity,
