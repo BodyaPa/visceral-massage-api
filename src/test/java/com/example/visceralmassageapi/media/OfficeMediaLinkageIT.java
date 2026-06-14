@@ -85,6 +85,31 @@ class OfficeMediaLinkageIT extends IntegrationTestBase {
 
         mvc.perform(delete("/api/admin/media/{mediaId}", mediaId).with(csrf()).cookie(masterCookies))
                 .andExpect(status().isBadRequest());
+
+        mvc.perform(put("/api/admin/offices/{id}", officeId)
+                        .with(csrf())
+                        .cookie(masterCookies)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {
+                                  "name":"Office Media Room",
+                                  "address":"Kyiv, Media Street 1",
+                                  "active":true,
+                                  "directions":"Use the media entrance.",
+                                  "googleMapsUrl":"https://maps.google.com/?q=Office+Media+Room",
+                                  "photoMediaId":null,
+                                  "videoMediaId":null
+                                }
+                                """))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.photoMediaId").doesNotExist())
+                .andExpect(jsonPath("$.photoMediaUrl").doesNotExist());
+
+        mvc.perform(get("/api/offices/{officeId}/media/{mediaId}/content", officeId, mediaId))
+                .andExpect(status().isNotFound());
+
+        mvc.perform(delete("/api/admin/media/{mediaId}", mediaId).with(csrf()).cookie(masterCookies))
+                .andExpect(status().isNoContent());
     }
 
     @Test

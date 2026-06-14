@@ -54,8 +54,11 @@ public class OfficeService {
     @Transactional
     public OfficeResponse update(long id, OfficeRequest request) {
         Office office = requireOffice(id);
+        UUID previousPhotoMediaId = office.getPhotoMediaId();
+        UUID previousVideoMediaId = office.getVideoMediaId();
         apply(office, request);
         linkOfficeMedia(office);
+        unlinkRemovedOfficeMedia(office, previousPhotoMediaId, previousVideoMediaId);
         return toResponse(office);
     }
 
@@ -125,6 +128,22 @@ public class OfficeService {
     private void linkOfficeMedia(Office office) {
         linkMedia(office.getPhotoMediaId(), office.getId(), "image/");
         linkMedia(office.getVideoMediaId(), office.getId(), "video/");
+    }
+
+    private void unlinkRemovedOfficeMedia(Office office, UUID previousPhotoMediaId, UUID previousVideoMediaId) {
+        unlinkRemovedMedia(office, previousPhotoMediaId);
+        unlinkRemovedMedia(office, previousVideoMediaId);
+    }
+
+    private void unlinkRemovedMedia(Office office, UUID previousMediaId) {
+        if (previousMediaId == null
+                || previousMediaId.equals(office.getPhotoMediaId())
+                || previousMediaId.equals(office.getVideoMediaId())) {
+            return;
+        }
+        mediaAssetRepository.findById(previousMediaId)
+                .filter(asset -> office.getId().equals(asset.getOfficeId()))
+                .ifPresent(asset -> asset.setOfficeId(null));
     }
 
     private void linkMedia(UUID mediaId, Long officeId, String contentTypePrefix) {
