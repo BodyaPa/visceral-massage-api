@@ -9,9 +9,10 @@ public record PublicScheduleAvailabilityResponse(
         Long officeId,
         String officeName,
         String officeAddress,
-        String officeLocationDetails,
-        String officeDescription,
         String officeDirections,
+        String officePhotoUrl,
+        String officeVideoUrl,
+        String officeGoogleMapsUrl,
         OffsetDateTime startsAt,
         OffsetDateTime endsAt
 ) {

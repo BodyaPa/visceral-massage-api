@@ -310,14 +310,19 @@ public class BookingService {
                 office == null ? null : office.getId(),
                 office == null ? null : office.getName(),
                 office == null ? null : office.getAddress(),
-                office == null ? null : office.getLocationDetails(),
-                office == null ? null : office.getDescription(),
-                office == null ? null : office.getDirections(),
+                office == null ? null : visibleDirections(office),
+                office == null ? null : office.getPhotoUrl(),
+                office == null ? null : office.getVideoUrl(),
+                office == null ? null : office.getGoogleMapsUrl(),
                 booking.getStartsAt(),
                 booking.getEndsAt(),
                 booking.isReminderOptIn(),
                 service.getExternalPaymentUrl()
         );
+    }
+
+    private String visibleDirections(Office office) {
+        return office.getDirections() == null ? office.getLocationDetails() : office.getDirections();
     }
 
     private FinanceBookingResponse toFinanceResponse(Booking booking) {

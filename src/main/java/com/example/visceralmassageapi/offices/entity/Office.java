@@ -35,10 +35,16 @@ public class Office {
     private String locationDetails;
 
     @Column(columnDefinition = "TEXT")
-    private String description;
-
-    @Column(columnDefinition = "TEXT")
     private String directions;
+
+    @Column(name = "photo_url", length = 2048)
+    private String photoUrl;
+
+    @Column(name = "video_url", length = 2048)
+    private String videoUrl;
+
+    @Column(name = "google_maps_url", length = 2048)
+    private String googleMapsUrl;
 
     @Column(name = "created_at", nullable = false)
     private OffsetDateTime createdAt;

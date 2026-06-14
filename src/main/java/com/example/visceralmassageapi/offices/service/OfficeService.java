@@ -62,8 +62,10 @@ public class OfficeService {
         office.setPhone(normalizeOptional(request.getPhone()));
         office.setEmail(normalizeEmail(request.getEmail()));
         office.setLocationDetails(normalizeOptional(request.getLocationDetails()));
-        office.setDescription(normalizeOptionalLongText(request.getDescription()));
         office.setDirections(normalizeOptionalLongText(request.getDirections()));
+        office.setPhotoUrl(normalizeOptional(request.getPhotoUrl()));
+        office.setVideoUrl(normalizeOptional(request.getVideoUrl()));
+        office.setGoogleMapsUrl(normalizeOptional(request.getGoogleMapsUrl()));
     }
 
     private String normalizeRequired(String value) {
@@ -107,10 +109,16 @@ public class OfficeService {
                 office.getPhone(),
                 office.getEmail(),
                 office.getLocationDetails(),
-                office.getDescription(),
-                office.getDirections(),
+                visibleDirections(office),
+                office.getPhotoUrl(),
+                office.getVideoUrl(),
+                office.getGoogleMapsUrl(),
                 office.getCreatedAt(),
                 office.getUpdatedAt()
         );
+    }
+
+    private String visibleDirections(Office office) {
+        return office.getDirections() == null ? office.getLocationDetails() : office.getDirections();
     }
 }

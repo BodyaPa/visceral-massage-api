@@ -589,9 +589,10 @@ public class SpecialistScheduleService {
                 office == null ? null : office.getId(),
                 office == null ? null : office.getName(),
                 office == null ? null : office.getAddress(),
-                office == null ? null : office.getLocationDetails(),
-                office == null ? null : office.getDescription(),
-                office == null ? null : office.getDirections(),
+                office == null ? null : visibleDirections(office),
+                office == null ? null : office.getPhotoUrl(),
+                office == null ? null : office.getVideoUrl(),
+                office == null ? null : office.getGoogleMapsUrl(),
                 block.getStartsAt(),
                 block.getEndsAt()
         );
@@ -867,12 +868,17 @@ public class SpecialistScheduleService {
                 office == null ? null : office.getId(),
                 office == null ? null : office.getName(),
                 office == null ? null : office.getAddress(),
-                office == null ? null : office.getLocationDetails(),
-                office == null ? null : office.getDescription(),
-                office == null ? null : office.getDirections(),
+                office == null ? null : visibleDirections(office),
+                office == null ? null : office.getPhotoUrl(),
+                office == null ? null : office.getVideoUrl(),
+                office == null ? null : office.getGoogleMapsUrl(),
                 startsAt,
                 endsAt
         );
+    }
+
+    private String visibleDirections(Office office) {
+        return office.getDirections() == null ? office.getLocationDetails() : office.getDirections();
     }
 
     private boolean overlapsAny(OffsetDateTime startsAt, OffsetDateTime endsAt, List<OffsetDateTime[]> ranges) {

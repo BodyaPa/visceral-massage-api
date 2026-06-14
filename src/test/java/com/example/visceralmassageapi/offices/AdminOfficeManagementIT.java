@@ -52,16 +52,19 @@ class AdminOfficeManagementIT extends IntegrationTestBase {
                                   "active":true,
                                   "phone":"+380441112233",
                                   "email":"OFFICE@EXAMPLE.COM",
-                                  "locationDetails":"Second floor",
-                                  "description":"Quiet office near the reception desk.",
-                                  "directions":"Use entrance B and follow signs to room 204."
+                                  "directions":"Use entrance B and follow signs to room 204.",
+                                  "photoUrl":"https://example.com/office.jpg",
+                                  "videoUrl":"https://example.com/office-video",
+                                  "googleMapsUrl":"https://maps.google.com/?q=Office+1"
                                 }
                                 """))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.name").value("Office 1"))
                 .andExpect(jsonPath("$.email").value("office@example.com"))
-                .andExpect(jsonPath("$.description").value("Quiet office near the reception desk."))
                 .andExpect(jsonPath("$.directions").value("Use entrance B and follow signs to room 204."))
+                .andExpect(jsonPath("$.photoUrl").value("https://example.com/office.jpg"))
+                .andExpect(jsonPath("$.videoUrl").value("https://example.com/office-video"))
+                .andExpect(jsonPath("$.googleMapsUrl").value("https://maps.google.com/?q=Office+1"))
                 .andReturn();
 
         long id = com.fasterxml.jackson.databind.json.JsonMapper.builder()
@@ -93,17 +96,20 @@ class AdminOfficeManagementIT extends IntegrationTestBase {
                                   "active":false,
                                   "phone":null,
                                   "email":null,
-                                  "locationDetails":"Entrance from the courtyard",
-                                  "description":"Renovated treatment room.",
-                                  "directions":"Call from the courtyard gate."
+                                  "directions":"Call from the courtyard gate.",
+                                  "photoUrl":null,
+                                  "videoUrl":"https://example.com/new-video",
+                                  "googleMapsUrl":"https://maps.google.com/?q=Renovated+Office"
                                 }
                                 """))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.name").value("Office 1 Renovated"))
                 .andExpect(jsonPath("$.active").value(false))
                 .andExpect(jsonPath("$.phone").doesNotExist())
-                .andExpect(jsonPath("$.description").value("Renovated treatment room."))
-                .andExpect(jsonPath("$.directions").value("Call from the courtyard gate."));
+                .andExpect(jsonPath("$.directions").value("Call from the courtyard gate."))
+                .andExpect(jsonPath("$.photoUrl").doesNotExist())
+                .andExpect(jsonPath("$.videoUrl").value("https://example.com/new-video"))
+                .andExpect(jsonPath("$.googleMapsUrl").value("https://maps.google.com/?q=Renovated+Office"));
     }
 
     @Test
