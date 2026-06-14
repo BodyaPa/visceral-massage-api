@@ -8,6 +8,10 @@ public record PublicScheduleAvailabilityResponse(
         String specialistName,
         Long officeId,
         String officeName,
+        String officeAddress,
+        String officeLocationDetails,
+        String officeDescription,
+        String officeDirections,
         OffsetDateTime startsAt,
         OffsetDateTime endsAt
 ) {

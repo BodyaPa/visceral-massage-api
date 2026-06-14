@@ -588,6 +588,10 @@ public class SpecialistScheduleService {
                 specialistName,
                 office == null ? null : office.getId(),
                 office == null ? null : office.getName(),
+                office == null ? null : office.getAddress(),
+                office == null ? null : office.getLocationDetails(),
+                office == null ? null : office.getDescription(),
+                office == null ? null : office.getDirections(),
                 block.getStartsAt(),
                 block.getEndsAt()
         );
@@ -862,6 +866,10 @@ public class SpecialistScheduleService {
                 specialistDisplayName(specialist),
                 office == null ? null : office.getId(),
                 office == null ? null : office.getName(),
+                office == null ? null : office.getAddress(),
+                office == null ? null : office.getLocationDetails(),
+                office == null ? null : office.getDescription(),
+                office == null ? null : office.getDirections(),
                 startsAt,
                 endsAt
         );

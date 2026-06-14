@@ -62,6 +62,8 @@ public class OfficeService {
         office.setPhone(normalizeOptional(request.getPhone()));
         office.setEmail(normalizeEmail(request.getEmail()));
         office.setLocationDetails(normalizeOptional(request.getLocationDetails()));
+        office.setDescription(normalizeOptionalLongText(request.getDescription()));
+        office.setDirections(normalizeOptionalLongText(request.getDirections()));
     }
 
     private String normalizeRequired(String value) {
@@ -82,6 +84,13 @@ public class OfficeService {
         return value.trim().toLowerCase(Locale.ROOT);
     }
 
+    private String normalizeOptionalLongText(String value) {
+        if (value == null || value.isBlank()) {
+            return null;
+        }
+        return value.trim().replace("\r\n", "\n").replace('\r', '\n');
+    }
+
     private String normalizeQuery(String query) {
         if (query == null || query.isBlank()) {
             return null;
@@ -98,6 +107,8 @@ public class OfficeService {
                 office.getPhone(),
                 office.getEmail(),
                 office.getLocationDetails(),
+                office.getDescription(),
+                office.getDirections(),
                 office.getCreatedAt(),
                 office.getUpdatedAt()
         );

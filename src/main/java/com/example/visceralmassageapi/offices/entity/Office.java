@@ -34,6 +34,12 @@ public class Office {
     @Column(name = "location_details", columnDefinition = "TEXT")
     private String locationDetails;
 
+    @Column(columnDefinition = "TEXT")
+    private String description;
+
+    @Column(columnDefinition = "TEXT")
+    private String directions;
+
     @Column(name = "created_at", nullable = false)
     private OffsetDateTime createdAt;
 

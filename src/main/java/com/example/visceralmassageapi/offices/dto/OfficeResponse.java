@@ -15,6 +15,8 @@ public class OfficeResponse {
     private String phone;
     private String email;
     private String locationDetails;
+    private String description;
+    private String directions;
     private OffsetDateTime createdAt;
     private OffsetDateTime updatedAt;
 }

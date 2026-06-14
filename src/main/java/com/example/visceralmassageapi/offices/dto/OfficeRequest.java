@@ -28,4 +28,10 @@ public class OfficeRequest {
 
     @Size(max = 2000)
     private String locationDetails;
+
+    @Size(max = 4000)
+    private String description;
+
+    @Size(max = 4000)
+    private String directions;
 }

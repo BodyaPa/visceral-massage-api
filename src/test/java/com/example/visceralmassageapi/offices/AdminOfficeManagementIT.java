@@ -52,12 +52,16 @@ class AdminOfficeManagementIT extends IntegrationTestBase {
                                   "active":true,
                                   "phone":"+380441112233",
                                   "email":"OFFICE@EXAMPLE.COM",
-                                  "locationDetails":"Second floor"
+                                  "locationDetails":"Second floor",
+                                  "description":"Quiet office near the reception desk.",
+                                  "directions":"Use entrance B and follow signs to room 204."
                                 }
                                 """))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.name").value("Office 1"))
                 .andExpect(jsonPath("$.email").value("office@example.com"))
+                .andExpect(jsonPath("$.description").value("Quiet office near the reception desk."))
+                .andExpect(jsonPath("$.directions").value("Use entrance B and follow signs to room 204."))
                 .andReturn();
 
         long id = com.fasterxml.jackson.databind.json.JsonMapper.builder()
@@ -89,13 +93,17 @@ class AdminOfficeManagementIT extends IntegrationTestBase {
                                   "active":false,
                                   "phone":null,
                                   "email":null,
-                                  "locationDetails":"Entrance from the courtyard"
+                                  "locationDetails":"Entrance from the courtyard",
+                                  "description":"Renovated treatment room.",
+                                  "directions":"Call from the courtyard gate."
                                 }
                                 """))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.name").value("Office 1 Renovated"))
                 .andExpect(jsonPath("$.active").value(false))
-                .andExpect(jsonPath("$.phone").doesNotExist());
+                .andExpect(jsonPath("$.phone").doesNotExist())
+                .andExpect(jsonPath("$.description").value("Renovated treatment room."))
+                .andExpect(jsonPath("$.directions").value("Call from the courtyard gate."));
     }
 
     @Test
