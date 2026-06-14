@@ -8,6 +8,7 @@ import com.example.visceralmassageapi.schedule.domain.FixedEvent;
 import com.example.visceralmassageapi.schedule.domain.FixedEventEnrollment;
 import com.example.visceralmassageapi.schedule.repository.FixedEventEnrollmentRepository;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -16,6 +17,7 @@ import java.time.format.DateTimeFormatter;
 
 @Service
 @RequiredArgsConstructor
+@Slf4j
 public class AppointmentReminderService {
 
     private static final int REMINDER_WINDOW_HOURS = 2;
@@ -29,9 +31,17 @@ public class AppointmentReminderService {
     public void sendDueReminders(OffsetDateTime now) {
         OffsetDateTime remindBefore = now.plusHours(REMINDER_WINDOW_HOURS);
         bookingRepository.findDueAppointmentReminders(now, remindBefore)
-                .forEach(booking -> sendBookingReminder(booking, now));
+                .forEach(booking -> sendSafely("booking", booking.getId(), () -> sendBookingReminder(booking, now)));
         enrollmentRepository.findDueEventReminders(now, remindBefore)
-                .forEach(enrollment -> sendEventReminder(enrollment, now));
+                .forEach(enrollment -> sendSafely("event enrollment", enrollment.getId(), () -> sendEventReminder(enrollment, now)));
+    }
+
+    private void sendSafely(String type, Long id, Runnable reminderSender) {
+        try {
+            reminderSender.run();
+        } catch (RuntimeException ex) {
+            log.warn("Failed to send {} reminder for id={}", type, id, ex);
+        }
     }
 
     private void sendBookingReminder(Booking booking, OffsetDateTime sentAt) {
