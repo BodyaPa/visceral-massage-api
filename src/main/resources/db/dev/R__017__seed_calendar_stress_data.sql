@@ -55,7 +55,7 @@ WITH specialist_seed(code, specialist_email, office_name) AS (
         ('S4', 'owner@dev.ataraksia.local', 'Ataraksia Lviv Pop-up')
 ),
 day_seed(day_offset) AS (
-    SELECT generate_series(1, 21)
+    SELECT generate_series(-7, 21)
 ),
 period_seed(period_code, starts_at, ends_at) AS (
     VALUES
@@ -90,12 +90,12 @@ WITH specialist_seed(code, specialist_email, office_name) AS (
         ('S4', 'owner@dev.ataraksia.local', 'Ataraksia Lviv Pop-up')
 ),
 blocked_seed(day_offset, starts_at, ends_at, reason) AS (
-    SELECT generated_day.day_offset, TIME '12:00', TIME '13:00', 'Lunch buffer check'
-    FROM generate_series(1, 21) AS generated_day(day_offset)
+    SELECT generated_day.day_offset, TIME '12:00', TIME '13:00', 'Lunch block check'
+    FROM generate_series(-7, 21) AS generated_day(day_offset)
     WHERE generated_day.day_offset % 5 = 0
     UNION ALL
     SELECT generated_day.day_offset, TIME '16:00', TIME '18:00', 'Late blocked admin slot'
-    FROM generate_series(1, 21) AS generated_day(day_offset)
+    FROM generate_series(-7, 21) AS generated_day(day_offset)
     WHERE generated_day.day_offset % 7 = 0
 )
 INSERT INTO specialist_availability_blocks (
@@ -126,7 +126,7 @@ WITH specialist_seed(code, specialist_email) AS (
         ('S4', 'owner@dev.ataraksia.local')
 ),
 day_seed(day_offset) AS (
-    SELECT generate_series(1, 18)
+    SELECT generate_series(-7, 18)
 ),
 slot_seed(period_code, starts_at, ends_at, service_title, slot_index) AS (
     VALUES
@@ -185,7 +185,7 @@ SELECT
     booking_seed.payout_status,
     CASE WHEN booking_seed.payout_status = 'PAID' THEN NOW() - INTERVAL '1 hour' ELSE NULL END,
     CASE WHEN booking_seed.payout_status = 'PAID' THEN finance_user.id ELSE NULL END,
-    NOW() - (booking_seed.day_offset || ' days')::INTERVAL,
+    NOW() - ((ABS(booking_seed.day_offset) + 1) || ' days')::INTERVAL,
     NOW()
 FROM booking_seed
 JOIN users client ON client.phone = '+380990000' || booking_seed.client_number
@@ -215,7 +215,7 @@ event_seed AS (
         CASE WHEN generated_day.day_offset % 3 = 0 THEN 2 ELSE 6 END AS capacity,
         generated_day.day_offset % 11 <> 0 AS active
     FROM specialist_seed
-    CROSS JOIN generate_series(2, 20, 3) AS generated_day(day_offset)
+    CROSS JOIN generate_series(-6, 20, 3) AS generated_day(day_offset)
 )
 INSERT INTO fixed_events (
     service_id, specialist_user_id, office_id, starts_at, ends_at, capacity, note, active, created_at, updated_at

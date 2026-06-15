@@ -61,10 +61,10 @@ public class SpecialistScheduleService {
     @Transactional(readOnly = true)
     public List<SpecialistAvailabilityResponse> listAvailability(long actorId, OffsetDateTime from, OffsetDateTime to, Long requestedSpecialistId) {
         validateQueryRange(from, to);
-        Long managedSpecialistId = resolveManagedSpecialistId(actorId, requestedSpecialistId);
+        Long managedSpecialistId = resolveManagedSpecialistIdForListing(actorId, requestedSpecialistId);
 
         Set<Long> bookedBlockIds = managedSpecialistId == null
-                ? Set.of()
+                ? Set.copyOf(bookingRepository.findBookedAvailabilityBlockIds(from, to))
                 : Set.copyOf(bookingRepository.findBookedAvailabilityBlockIds(managedSpecialistId, from, to));
 
         return availabilityBlockRepository.findManagedRange(managedSpecialistId, from, to)
@@ -417,6 +417,21 @@ public class SpecialistScheduleService {
         return requestedSpecialistId;
     }
 
+    private Long resolveManagedSpecialistIdForListing(long actorId, Long requestedSpecialistId) {
+        User actor = requireSpecialist(actorId);
+        if (requestedSpecialistId == null) {
+            return actor.getRoles().contains(UserRole.MASTER) ? null : actorId;
+        }
+        if (requestedSpecialistId.equals(actorId)) {
+            return actorId;
+        }
+        if (!actor.getRoles().contains(UserRole.MASTER)) {
+            throw new AccessDeniedException("MASTER role is required to manage another specialist schedule");
+        }
+        requireSpecialist(requestedSpecialistId);
+        return requestedSpecialistId;
+    }
+
     private void ensureCanManageBlock(long actorId, SpecialistAvailabilityBlock block) {
         User actor = requireSpecialist(actorId);
         if (block.getSpecialist().getId().equals(actorId)) {
@@ -689,8 +704,7 @@ public class SpecialistScheduleService {
             OffsetDateTime from,
             OffsetDateTime to
     ) {
-        List<PublicScheduleUnavailableResponse> buffers = new ArrayList<>(2);
-        addBufferPublicResponse(buffers, idPrefix + "-before", specialist, office, startsAt.minusMinutes(appointmentBufferMinutes()), startsAt, from, to);
+        List<PublicScheduleUnavailableResponse> buffers = new ArrayList<>(1);
         addBufferPublicResponse(buffers, idPrefix + "-after", specialist, office, endsAt, endsAt.plusMinutes(appointmentBufferMinutes()), from, to);
         return buffers;
     }
@@ -736,9 +750,9 @@ public class SpecialistScheduleService {
         int durationMinutes = service.getDurationMinutes();
         OffsetDateTime blockStartsAt = max(block.getStartsAt(), from);
         OffsetDateTime blockEndsAt = min(block.getEndsAt(), to);
-        List<OffsetDateTime[]> occupiedRanges = new ArrayList<>(bookedRanges(block, blockStartsAt, blockEndsAt));
-        occupiedRanges.addAll(blockedRanges(block, blockStartsAt, blockEndsAt));
-        occupiedRanges.addAll(fixedEventRanges(block, blockStartsAt, blockEndsAt));
+        List<OffsetDateTime[]> commitmentRanges = new ArrayList<>(bookedRanges(block, blockStartsAt, blockEndsAt));
+        commitmentRanges.addAll(fixedEventRanges(block, blockStartsAt, blockEndsAt));
+        List<OffsetDateTime[]> blockedRanges = blockedRanges(block, blockStartsAt, blockEndsAt);
         List<PublicScheduleAvailabilityResponse> slots = new ArrayList<>();
 
         for (OffsetDateTime slotStartsAt = blockStartsAt;
@@ -746,7 +760,9 @@ public class SpecialistScheduleService {
              slotStartsAt = slotStartsAt.plusMinutes(durationMinutes)) {
             OffsetDateTime slotEndsAt = slotStartsAt.plusMinutes(durationMinutes);
 
-            if (slotStartsAt.isAfter(OffsetDateTime.now()) && !overlapsAny(slotStartsAt, slotEndsAt, occupiedRanges)) {
+            if (slotStartsAt.isAfter(OffsetDateTime.now())
+                    && !overlapsAny(slotStartsAt, slotEndsAt.plusMinutes(appointmentBufferMinutes()), commitmentRanges)
+                    && !overlapsAny(slotStartsAt, slotEndsAt, blockedRanges)) {
                 slots.add(toPublicResponse(block, slotStartsAt, slotEndsAt));
             }
         }
@@ -803,7 +819,7 @@ public class SpecialistScheduleService {
             OffsetDateTime endsAt
     ) {
         return fixedEventRepository
-                .findActiveOverlappingForSpecialist(block.getSpecialist().getId(), null, startsAt, endsAt)
+                .findActiveOverlappingForSpecialist(block.getSpecialist().getId(), null, startsAt.minusMinutes(appointmentBufferMinutes()), endsAt.plusMinutes(appointmentBufferMinutes()))
                 .stream()
                 .map(event -> bufferedRange(event.getStartsAt(), event.getEndsAt()))
                 .toList();
@@ -828,7 +844,7 @@ public class SpecialistScheduleService {
 
     private OffsetDateTime[] bufferedRange(OffsetDateTime startsAt, OffsetDateTime endsAt) {
         return new OffsetDateTime[]{
-                startsAt.minusMinutes(appointmentBufferMinutes()),
+                startsAt,
                 endsAt.plusMinutes(appointmentBufferMinutes())
         };
     }

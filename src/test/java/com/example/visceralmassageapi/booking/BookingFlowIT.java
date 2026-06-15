@@ -391,7 +391,7 @@ class BookingFlowIT extends IntegrationTestBase {
     }
 
     @Test
-    void publicUnavailableIncludesComputedBuffersAroundBookingsAndEvents() throws Exception {
+    void publicUnavailableIncludesComputedBuffersAfterBookingsAndEvents() throws Exception {
         Cookie[] specialistCookies = loginCookies(OWNER_PHONE);
         Cookie[] userCookies = loginCookies(createUser());
         long officeId = createOffice();
@@ -429,11 +429,11 @@ class BookingFlowIT extends IntegrationTestBase {
                         .param("to", "2036-01-02T15:00:00Z")
                         .param("officeId", String.valueOf(officeId)))
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$[?(@.id == 'booking-buffer-%s-before' && @.status == 'BUFFER' && @.startsAt == '2036-01-02T09:30:00Z' && @.endsAt == '2036-01-02T10:00:00Z')]".formatted(bookingId)).exists())
+                .andExpect(jsonPath("$[?(@.id == 'booking-buffer-%s-before')]".formatted(bookingId)).doesNotExist())
                 .andExpect(jsonPath("$[?(@.status == 'OCCUPIED' && @.startsAt == '2036-01-02T10:00:00Z' && @.endsAt == '2036-01-02T11:00:00Z')]").exists())
                 .andExpect(jsonPath("$[?(@.id == 'booking-buffer-%s-after' && @.status == 'BUFFER' && @.startsAt == '2036-01-02T11:00:00Z' && @.endsAt == '2036-01-02T11:30:00Z')]".formatted(bookingId)).exists())
                 .andExpect(jsonPath("$[?(@.id == 'event-%s' && @.status == 'UNAVAILABLE' && @.startsAt == '2036-01-02T13:00:00Z' && @.endsAt == '2036-01-02T14:00:00Z')]".formatted(event.getId())).exists())
-                .andExpect(jsonPath("$[?(@.id == 'event-buffer-%s-before' && @.status == 'BUFFER' && @.startsAt == '2036-01-02T12:30:00Z' && @.endsAt == '2036-01-02T13:00:00Z')]".formatted(event.getId())).exists())
+                .andExpect(jsonPath("$[?(@.id == 'event-buffer-%s-before')]".formatted(event.getId())).doesNotExist())
                 .andExpect(jsonPath("$[?(@.id == 'event-buffer-%s-after' && @.status == 'BUFFER' && @.startsAt == '2036-01-02T14:00:00Z' && @.endsAt == '2036-01-02T14:30:00Z')]".formatted(event.getId())).exists());
     }
 

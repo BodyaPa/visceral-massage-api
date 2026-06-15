@@ -2,6 +2,7 @@ WITH seed(marker, service_title, specialist_email, office_name, day_offset, star
     VALUES
         ('[DEV_SEED:FIXED_EVENT_GROUP_01]', 'Груповий сеанс', 'specialist@dev.ataraksia.local', 'Ataraksia Center', 6, TIME '08:30', TIME '10:00', 5, TRUE, 'Ранковий груповий сеанс [DEV_SEED:FIXED_EVENT_GROUP_01]'),
         ('[DEV_SEED:FIXED_EVENT_GROUP_FULL]', 'Груповий сеанс', 'owner@dev.ataraksia.local', 'Ataraksia Studio', 9, TIME '12:00', TIME '13:30', 1, TRUE, 'Заповнений тестовий груповий сеанс [DEV_SEED:FIXED_EVENT_GROUP_FULL]'),
+        ('[DEV_EXTRA:PAST_GROUP_EVENT]', 'Груповий сеанс', 'specialist@dev.ataraksia.local', 'Ataraksia Center', -2, TIME '08:30', TIME '10:00', 5, TRUE, 'Минулий груповий сеанс [DEV_EXTRA:PAST_GROUP_EVENT]'),
         ('[DEV_EXTRA:WORKSHOP_OPEN]', 'Парний навчальний воркшоп', 'specialist.two@dev.ataraksia.local', 'Ataraksia Podil Room', 2, TIME '18:30', TIME '20:30', 6, TRUE, 'Evening partner workshop [DEV_EXTRA:WORKSHOP_OPEN]'),
         ('[DEV_EXTRA:WORKSHOP_NEAR_FULL]', 'Парний навчальний воркшоп', 'specialist.finance@dev.ataraksia.local', 'Ataraksia Center', 7, TIME '11:00', TIME '13:00', 2, TRUE, 'Nearly full workshop [DEV_EXTRA:WORKSHOP_NEAR_FULL]'),
         ('[DEV_EXTRA:GROUP_CANCELLED_ENROLLMENT]', 'Груповий сеанс', 'specialist.two@dev.ataraksia.local', 'Ataraksia Lviv Pop-up', 12, TIME '15:00', TIME '16:30', 4, TRUE, 'Event with cancelled enrollment [DEV_EXTRA:GROUP_CANCELLED_ENROLLMENT]'),
@@ -27,6 +28,7 @@ WITH seed(marker, service_title, specialist_email, office_name, day_offset, star
     VALUES
         ('[DEV_SEED:FIXED_EVENT_GROUP_01]', 'Груповий сеанс', 'specialist@dev.ataraksia.local', 'Ataraksia Center', 6, TIME '08:30', TIME '10:00', 5, TRUE, 'Ранковий груповий сеанс [DEV_SEED:FIXED_EVENT_GROUP_01]'),
         ('[DEV_SEED:FIXED_EVENT_GROUP_FULL]', 'Груповий сеанс', 'owner@dev.ataraksia.local', 'Ataraksia Studio', 9, TIME '12:00', TIME '13:30', 1, TRUE, 'Заповнений тестовий груповий сеанс [DEV_SEED:FIXED_EVENT_GROUP_FULL]'),
+        ('[DEV_EXTRA:PAST_GROUP_EVENT]', 'Груповий сеанс', 'specialist@dev.ataraksia.local', 'Ataraksia Center', -2, TIME '08:30', TIME '10:00', 5, TRUE, 'Минулий груповий сеанс [DEV_EXTRA:PAST_GROUP_EVENT]'),
         ('[DEV_EXTRA:WORKSHOP_OPEN]', 'Парний навчальний воркшоп', 'specialist.two@dev.ataraksia.local', 'Ataraksia Podil Room', 2, TIME '18:30', TIME '20:30', 6, TRUE, 'Evening partner workshop [DEV_EXTRA:WORKSHOP_OPEN]'),
         ('[DEV_EXTRA:WORKSHOP_NEAR_FULL]', 'Парний навчальний воркшоп', 'specialist.finance@dev.ataraksia.local', 'Ataraksia Center', 7, TIME '11:00', TIME '13:00', 2, TRUE, 'Nearly full workshop [DEV_EXTRA:WORKSHOP_NEAR_FULL]'),
         ('[DEV_EXTRA:GROUP_CANCELLED_ENROLLMENT]', 'Груповий сеанс', 'specialist.two@dev.ataraksia.local', 'Ataraksia Lviv Pop-up', 12, TIME '15:00', TIME '16:30', 4, TRUE, 'Event with cancelled enrollment [DEV_EXTRA:GROUP_CANCELLED_ENROLLMENT]'),
@@ -60,6 +62,7 @@ WITH seed(event_marker, client_phone, enrollment_status, reminder_opt_in, remind
     VALUES
         ('[DEV_SEED:FIXED_EVENT_GROUP_01]', '+380990000011', 'ACTIVE', TRUE, FALSE),
         ('[DEV_SEED:FIXED_EVENT_GROUP_FULL]', '+380990000012', 'ACTIVE', FALSE, FALSE),
+        ('[DEV_EXTRA:PAST_GROUP_EVENT]', '+380990000014', 'ACTIVE', FALSE, FALSE),
         ('[DEV_EXTRA:WORKSHOP_OPEN]', '+380990000011', 'ACTIVE', TRUE, FALSE),
         ('[DEV_EXTRA:WORKSHOP_OPEN]', '+380990000027', 'ACTIVE', FALSE, FALSE),
         ('[DEV_EXTRA:WORKSHOP_NEAR_FULL]', '+380990000012', 'ACTIVE', TRUE, TRUE),

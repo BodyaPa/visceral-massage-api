@@ -170,7 +170,7 @@ public class FixedEventService {
     @Transactional(readOnly = true)
     public List<SpecialistFixedEventResponse> listOwn(long actorId, OffsetDateTime from, OffsetDateTime to, Long requestedSpecialistId) {
         validateRange(from, to);
-        long specialistId = resolveManagedSpecialistId(actorId, requestedSpecialistId);
+        Long specialistId = resolveManagedSpecialistIdForListing(actorId, requestedSpecialistId);
         return fixedEventRepository.findManagedRange(specialistId, from, to)
                 .stream()
                 .map(this::toSpecialistResponse)
@@ -185,7 +185,7 @@ public class FixedEventService {
     @Transactional(readOnly = true)
     public List<SpecialistFixedEventEnrollmentResponse> listOwnEnrollments(long actorId, OffsetDateTime from, OffsetDateTime to, Long requestedSpecialistId) {
         validateRange(from, to);
-        long specialistId = resolveManagedSpecialistId(actorId, requestedSpecialistId);
+        Long specialistId = resolveManagedSpecialistIdForListing(actorId, requestedSpecialistId);
         return fixedEventEnrollmentRepository.findForSpecialistEvents(specialistId, from, to)
                 .stream()
                 .map(this::toSpecialistEnrollmentResponse)
@@ -257,6 +257,29 @@ public class FixedEventService {
         }
         if (requestedSpecialistId == null || requestedSpecialistId.equals(actorId)) {
             return requestedSpecialistId == null ? actorId : requestedSpecialistId;
+        }
+        if (!actor.getRoles().contains(UserRole.MASTER)) {
+            throw new AccessDeniedException("MASTER role is required to manage another specialist schedule");
+        }
+        User specialist = userRepository.findById(requestedSpecialistId)
+                .orElseThrow(() -> new NotFoundException("Specialist not found"));
+        if (!specialist.getRoles().contains(UserRole.SPECIALIST)) {
+            throw new AccessDeniedException("Specialist role is required");
+        }
+        return requestedSpecialistId;
+    }
+
+    private Long resolveManagedSpecialistIdForListing(long actorId, Long requestedSpecialistId) {
+        User actor = userRepository.findById(actorId)
+                .orElseThrow(() -> new NotFoundException("Specialist not found"));
+        if (!actor.getRoles().contains(UserRole.SPECIALIST)) {
+            throw new AccessDeniedException("Specialist role is required");
+        }
+        if (requestedSpecialistId == null) {
+            return actor.getRoles().contains(UserRole.MASTER) ? null : actorId;
+        }
+        if (requestedSpecialistId.equals(actorId)) {
+            return actorId;
         }
         if (!actor.getRoles().contains(UserRole.MASTER)) {
             throw new AccessDeniedException("MASTER role is required to manage another specialist schedule");

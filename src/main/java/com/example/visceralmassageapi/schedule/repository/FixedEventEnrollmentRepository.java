@@ -46,12 +46,12 @@ public interface FixedEventEnrollmentRepository extends JpaRepository<FixedEvent
             JOIN FETCH event.service
             LEFT JOIN FETCH event.office
             JOIN FETCH enrollment.user
-            WHERE event.specialist.id = :specialistId
+            WHERE (:specialistId IS NULL OR event.specialist.id = :specialistId)
               AND event.startsAt < :to
               AND event.endsAt > :from
             ORDER BY event.startsAt ASC, enrollment.createdAt ASC, enrollment.id ASC
             """)
-    List<FixedEventEnrollment> findForSpecialistEvents(long specialistId, OffsetDateTime from, OffsetDateTime to);
+    List<FixedEventEnrollment> findForSpecialistEvents(Long specialistId, OffsetDateTime from, OffsetDateTime to);
 
     @Query("""
             SELECT enrollment

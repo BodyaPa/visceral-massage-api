@@ -490,6 +490,78 @@ class SpecialistScheduleManagementIT extends IntegrationTestBase {
     }
 
     @Test
+    void masterSpecialistDefaultScheduleListsAllSpecialistsCalendarItems() throws Exception {
+        Cookie[] ownerCookies = loginCookies(OWNER_PHONE);
+        User owner = userRepository.findByPhone(OWNER_PHONE).orElseThrow();
+        User otherSpecialist = createUserWithRoles(uniquePhone(), UserRole.SPECIALIST);
+        User client = createUserWithRoles(uniquePhone());
+        ServiceOffering bookingService = createService();
+        SpecialistAvailabilityBlock ownerBlock = createAvailabilityEntity(
+                owner,
+                "2032-04-02T08:00:00Z",
+                "2032-04-02T09:00:00Z"
+        );
+        SpecialistAvailabilityBlock otherBlock = createAvailabilityEntity(
+                otherSpecialist,
+                "2032-04-02T10:00:00Z",
+                "2032-04-02T11:00:00Z"
+        );
+        Booking booking = createBookingEntity(client, otherSpecialist, otherBlock, bookingService);
+        SpecialistAvailabilityBlock cancelledBlock = createAvailabilityEntity(
+                otherSpecialist,
+                "2032-04-02T12:00:00Z",
+                "2032-04-02T13:00:00Z"
+        );
+        Booking cancelledBooking = createBookingEntity(client, otherSpecialist, cancelledBlock, bookingService);
+        cancelledBooking.setStatus(BookingStatus.CANCELLED);
+        bookingRepository.save(cancelledBooking);
+        ServiceOffering eventService = createFixedEventService();
+        long officeId = createOffice();
+
+        var eventResult = mvc.perform(post("/api/admin/schedule/events")
+                        .with(csrf())
+                        .cookie(ownerCookies)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {
+                                  "specialistId":%s,
+                                  "serviceId":%s,
+                                  "officeId":%s,
+                                  "startsAt":"2032-04-03T08:00:00Z",
+                                  "endsAt":"2032-04-03T09:30:00Z",
+                                  "capacity":4,
+                                  "active":true
+                                }
+                                """.formatted(otherSpecialist.getId(), eventService.getId(), officeId)))
+                .andExpect(status().isOk())
+                .andReturn();
+        long eventId = objectMapper.readTree(eventResult.getResponse().getContentAsString()).path("id").asLong();
+
+        mvc.perform(get("/api/admin/schedule/availability")
+                        .cookie(ownerCookies)
+                        .param("from", "2032-04-01T00:00:00Z")
+                        .param("to", "2032-04-08T00:00:00Z"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$[?(@.id == %s)]".formatted(ownerBlock.getId())).exists())
+                .andExpect(jsonPath("$[?(@.id == %s && @.booked == true)]".formatted(otherBlock.getId())).exists());
+
+        mvc.perform(get("/api/admin/schedule/bookings")
+                        .cookie(ownerCookies)
+                        .param("from", "2032-04-01T00:00:00Z")
+                        .param("to", "2032-04-08T00:00:00Z"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$[?(@.id == %s)]".formatted(booking.getId())).exists())
+                .andExpect(jsonPath("$[?(@.id == %s && @.status == 'CANCELLED')]".formatted(cancelledBooking.getId())).exists());
+
+        mvc.perform(get("/api/admin/schedule/events")
+                        .cookie(ownerCookies)
+                        .param("from", "2032-04-01T00:00:00Z")
+                        .param("to", "2032-04-08T00:00:00Z"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$[?(@.id == %s)]".formatted(eventId)).exists());
+    }
+
+    @Test
     void masterSpecialistCanCopyOtherSpecialistDayPlan() throws Exception {
         Cookie[] ownerCookies = loginCookies(OWNER_PHONE);
         User otherSpecialist = createUserWithRoles(uniquePhone(), UserRole.SPECIALIST);

@@ -77,6 +77,15 @@ public interface BookingRepository extends JpaRepository<Booking, Long>, JpaSpec
             """)
     List<Long> findBookedAvailabilityBlockIds(long specialistId, OffsetDateTime from, OffsetDateTime to);
 
+    @Query("""
+            SELECT booking.availabilityBlock.id
+            FROM Booking booking
+            WHERE booking.status <> com.example.visceralmassageapi.booking.domain.BookingStatus.CANCELLED
+              AND booking.startsAt < :to
+              AND booking.endsAt > :from
+            """)
+    List<Long> findBookedAvailabilityBlockIds(OffsetDateTime from, OffsetDateTime to);
+
     @Query(value = """
             SELECT booking
             FROM Booking booking
@@ -103,13 +112,12 @@ public interface BookingRepository extends JpaRepository<Booking, Long>, JpaSpec
             JOIN FETCH booking.specialist specialist
             JOIN FETCH booking.service
             LEFT JOIN FETCH booking.office
-            WHERE specialist.id = :specialistId
-              AND booking.status <> com.example.visceralmassageapi.booking.domain.BookingStatus.CANCELLED
+            WHERE (:specialistId IS NULL OR specialist.id = :specialistId)
               AND booking.startsAt < :to
               AND booking.endsAt > :from
             ORDER BY booking.startsAt ASC, booking.id ASC
             """)
-    List<Booking> findSpecialistBookings(long specialistId, OffsetDateTime from, OffsetDateTime to);
+    List<Booking> findSpecialistBookings(Long specialistId, OffsetDateTime from, OffsetDateTime to);
 
     @Query("""
             SELECT booking
