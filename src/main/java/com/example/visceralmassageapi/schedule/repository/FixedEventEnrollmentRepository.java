@@ -20,6 +20,8 @@ public interface FixedEventEnrollmentRepository extends JpaRepository<FixedEvent
             FixedEventEnrollmentStatus status
     );
 
+    Optional<FixedEventEnrollment> findFirstByEventIdAndUserIdOrderByUpdatedAtDescIdDesc(long eventId, long userId);
+
     @Query("""
             SELECT enrollment
             FROM FixedEventEnrollment enrollment
@@ -33,11 +35,11 @@ public interface FixedEventEnrollmentRepository extends JpaRepository<FixedEvent
             FROM FixedEventEnrollment enrollment
             JOIN FETCH enrollment.event event
             WHERE enrollment.user.id = :userId
-              AND enrollment.status = com.example.visceralmassageapi.schedule.domain.FixedEventEnrollmentStatus.ACTIVE
               AND event.startsAt < :to
               AND event.endsAt > :from
+            ORDER BY event.startsAt DESC, enrollment.updatedAt DESC, enrollment.id DESC
             """)
-    List<FixedEventEnrollment> findActiveForUser(long userId, OffsetDateTime from, OffsetDateTime to);
+    List<FixedEventEnrollment> findForUser(long userId, OffsetDateTime from, OffsetDateTime to);
 
     @Query("""
             SELECT enrollment

@@ -3,6 +3,7 @@ package com.example.visceralmassageapi.schedule.dto;
 import java.math.BigDecimal;
 import java.time.OffsetDateTime;
 import java.util.UUID;
+import com.example.visceralmassageapi.schedule.domain.FixedEventEnrollmentStatus;
 
 public record PublicFixedEventResponse(
         long id,
@@ -27,6 +28,7 @@ public record PublicFixedEventResponse(
         int remainingPlaces,
         boolean full,
         boolean enrolled,
+        FixedEventEnrollmentStatus enrollmentStatus,
         BigDecimal price,
         String note
 ) {

@@ -718,7 +718,7 @@ class BookingFlowIT extends IntegrationTestBase {
                 .andExpect(jsonPath("$.taxableIncome").value(650))
                 .andExpect(jsonPath("$.quarterlyTaxPercent").value(5.0))
                 .andExpect(jsonPath("$.estimatedTax").value(32.5))
-                .andExpect(jsonPath("$.result").value(650));
+                .andExpect(jsonPath("$.result").value(617.5));
 
         mvc.perform(get("/api/admin/finance/summary")
                         .cookie(userCookies)
@@ -1016,6 +1016,7 @@ class BookingFlowIT extends IntegrationTestBase {
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$[0].id").value(event.getId()))
                 .andExpect(jsonPath("$[0].enrolled").value(true))
+                .andExpect(jsonPath("$[0].enrollmentStatus").value("ACTIVE"))
                 .andExpect(jsonPath("$[0].remainingPlaces").value(0));
 
         mvc.perform(post("/api/schedule/events/{id}/enroll", event.getId())
@@ -1030,6 +1031,7 @@ class BookingFlowIT extends IntegrationTestBase {
                         .cookie(firstUserCookies))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.enrolled").value(false))
+                .andExpect(jsonPath("$.enrollmentStatus").value("CANCELLED"))
                 .andExpect(jsonPath("$.remainingPlaces").value(1));
 
         mvc.perform(get("/api/schedule/events/my")
@@ -1037,7 +1039,9 @@ class BookingFlowIT extends IntegrationTestBase {
                         .param("from", "2031-04-01T00:00:00Z")
                         .param("to", "2031-04-08T00:00:00Z"))
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$[0]").doesNotExist());
+                .andExpect(jsonPath("$[0].id").value(event.getId()))
+                .andExpect(jsonPath("$[0].enrolled").value(false))
+                .andExpect(jsonPath("$[0].enrollmentStatus").value("CANCELLED"));
 
         mvc.perform(post("/api/schedule/events/{id}/enroll", event.getId())
                         .with(csrf())

@@ -58,6 +58,7 @@ public class FinanceSummaryService {
         BigDecimal estimatedTax = taxableIncome
                 .multiply(quarterlyTaxPercent)
                 .divide(BigDecimal.valueOf(100), 2, RoundingMode.HALF_UP);
+        BigDecimal result = businessIncome.subtract(expenses).subtract(estimatedTax);
 
         return new FinanceSummaryResponse(
                 pendingCount,
@@ -69,7 +70,7 @@ public class FinanceSummaryService {
                 taxableIncome,
                 quarterlyTaxPercent,
                 estimatedTax,
-                businessIncome.subtract(expenses)
+                result
         );
     }
 

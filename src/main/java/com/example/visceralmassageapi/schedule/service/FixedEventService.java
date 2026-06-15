@@ -67,6 +67,7 @@ public class FixedEventService {
         List<Long> eventIds = events.stream().map(FixedEvent::getId).toList();
         Map<Long, Integer> enrollmentCounts = new HashMap<>();
         Set<Long> enrolledEventIds = new HashSet<>();
+        Map<Long, FixedEventEnrollmentStatus> currentUserEnrollmentStatuses = new HashMap<>();
 
         if (!eventIds.isEmpty()) {
             for (FixedEventEnrollment enrollment : fixedEventEnrollmentRepository.findActiveForEvents(eventIds)) {
@@ -74,6 +75,15 @@ public class FixedEventService {
                 enrollmentCounts.merge(eventId, 1, Integer::sum);
                 if (currentUserId != null && enrollment.getUser().getId().equals(currentUserId)) {
                     enrolledEventIds.add(eventId);
+                    currentUserEnrollmentStatuses.put(eventId, enrollment.getStatus());
+                }
+            }
+            if (currentUserId != null) {
+                for (FixedEvent event : events) {
+                    currentUserEnrollmentStatuses.computeIfAbsent(event.getId(), id -> fixedEventEnrollmentRepository
+                            .findFirstByEventIdAndUserIdOrderByUpdatedAtDescIdDesc(id, currentUserId)
+                            .map(FixedEventEnrollment::getStatus)
+                            .orElse(null));
                 }
             }
         }
@@ -83,6 +93,7 @@ public class FixedEventService {
                         event,
                         enrollmentCounts.getOrDefault(event.getId(), 0),
                         enrolledEventIds.contains(event.getId()),
+                        currentUserEnrollmentStatuses.get(event.getId()),
                         locale
                 ))
                 .toList();
@@ -107,7 +118,7 @@ public class FixedEventService {
                 .findByEventIdAndUserIdAndStatus(eventId, userId, FixedEventEnrollmentStatus.ACTIVE);
         if (existingEnrollment.isPresent()) {
             int enrolledCount = (int) fixedEventEnrollmentRepository.countByEventIdAndStatus(eventId, FixedEventEnrollmentStatus.ACTIVE);
-            return toResponse(event, enrolledCount, true, locale);
+            return toResponse(event, enrolledCount, true, FixedEventEnrollmentStatus.ACTIVE, locale);
         }
 
         int enrolledCount = (int) fixedEventEnrollmentRepository.countByEventIdAndStatus(eventId, FixedEventEnrollmentStatus.ACTIVE);
@@ -122,13 +133,13 @@ public class FixedEventService {
         enrollment.setReminderOptIn(request.reminderOptIn());
         fixedEventEnrollmentRepository.save(enrollment);
 
-        return toResponse(event, enrolledCount + 1, true, locale);
+        return toResponse(event, enrolledCount + 1, true, FixedEventEnrollmentStatus.ACTIVE, locale);
     }
 
     @Transactional(readOnly = true)
     public List<PublicFixedEventResponse> listMyEnrollments(long userId, OffsetDateTime from, OffsetDateTime to, ServiceLocale locale) {
         validateRange(from, to);
-        List<FixedEventEnrollment> enrollments = fixedEventEnrollmentRepository.findActiveForUser(userId, from, to);
+        List<FixedEventEnrollment> enrollments = fixedEventEnrollmentRepository.findForUser(userId, from, to);
         List<Long> eventIds = enrollments.stream().map(enrollment -> enrollment.getEvent().getId()).toList();
         Map<Long, Integer> enrollmentCounts = new HashMap<>();
 
@@ -139,8 +150,13 @@ public class FixedEventService {
         }
 
         return enrollments.stream()
-                .map(FixedEventEnrollment::getEvent)
-                .map(event -> toResponse(event, enrollmentCounts.getOrDefault(event.getId(), 0), true, locale))
+                .map(enrollment -> toResponse(
+                        enrollment.getEvent(),
+                        enrollmentCounts.getOrDefault(enrollment.getEvent().getId(), 0),
+                        enrollment.getStatus() == FixedEventEnrollmentStatus.ACTIVE,
+                        enrollment.getStatus(),
+                        locale
+                ))
                 .toList();
     }
 
@@ -159,7 +175,7 @@ public class FixedEventService {
         fixedEventEnrollmentRepository.save(enrollment);
         int enrolledCount = (int) fixedEventEnrollmentRepository.countByEventIdAndStatus(eventId, FixedEventEnrollmentStatus.ACTIVE);
 
-        return toResponse(event, Math.max(enrolledCount, 0), false, locale);
+        return toResponse(event, Math.max(enrolledCount, 0), false, FixedEventEnrollmentStatus.CANCELLED, locale);
     }
 
     @Transactional(readOnly = true)
@@ -377,7 +393,7 @@ public class FixedEventService {
         return note.trim().replaceAll("\\s+", " ");
     }
 
-    private PublicFixedEventResponse toResponse(FixedEvent event, int enrolledCount, boolean enrolled, ServiceLocale locale) {
+    private PublicFixedEventResponse toResponse(FixedEvent event, int enrolledCount, boolean enrolled, FixedEventEnrollmentStatus enrollmentStatus, ServiceLocale locale) {
         ServiceOffering service = event.getService();
         Office office = event.getOffice();
         User specialist = event.getSpecialist();
@@ -406,6 +422,7 @@ public class FixedEventService {
                 remainingPlaces,
                 remainingPlaces <= 0,
                 enrolled,
+                enrollmentStatus,
                 service.getBasePrice(),
                 event.getNote()
         );
