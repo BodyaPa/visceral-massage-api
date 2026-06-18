@@ -62,9 +62,23 @@ public interface FixedEventRepository extends JpaRepository<FixedEvent, Long> {
             WHERE (:specialistId IS NULL OR specialist.id = :specialistId)
               AND event.startsAt < :to
               AND event.endsAt > :from
+              AND (:active IS NULL OR event.active = :active)
+              AND (:officeId IS NULL OR office.id = :officeId)
+              AND (:serviceId IS NULL OR event.service.id = :serviceId)
             ORDER BY event.startsAt ASC, event.id ASC
             """)
-    List<FixedEvent> findManagedRange(Long specialistId, OffsetDateTime from, OffsetDateTime to);
+    List<FixedEvent> findManagedRange(
+            Long specialistId,
+            OffsetDateTime from,
+            OffsetDateTime to,
+            Boolean active,
+            Long officeId,
+            Long serviceId
+    );
+
+    default List<FixedEvent> findManagedRange(Long specialistId, OffsetDateTime from, OffsetDateTime to) {
+        return findManagedRange(specialistId, from, to, null, null, null);
+    }
 
     @Query("""
             SELECT event

@@ -177,6 +177,7 @@ public class BookingService {
         if (availabilityBlockRepository.overlapsBlockedForAvailability(
                 block.getSpecialist().getId(),
                 officeId,
+                null,
                 bookingStartsAt,
                 bookingEndsAt
         )) {
@@ -249,9 +250,22 @@ public class BookingService {
             OffsetDateTime to,
             Long requestedSpecialistId
     ) {
+        return listSpecialistBookings(actorId, from, to, requestedSpecialistId, null, null, null);
+    }
+
+    @Transactional(readOnly = true)
+    public List<SpecialistBookingResponse> listSpecialistBookings(
+            long actorId,
+            OffsetDateTime from,
+            OffsetDateTime to,
+            Long requestedSpecialistId,
+            BookingStatus status,
+            Long officeId,
+            Long serviceId
+    ) {
         validateSpecialistRange(from, to);
         Long specialistId = resolveManagedSpecialistIdForListing(actorId, requestedSpecialistId);
-        return bookingRepository.findSpecialistBookings(specialistId, from, to)
+        return bookingRepository.findSpecialistBookings(specialistId, from, to, status, officeId, serviceId)
                 .stream()
                 .map(this::toSpecialistResponse)
                 .toList();

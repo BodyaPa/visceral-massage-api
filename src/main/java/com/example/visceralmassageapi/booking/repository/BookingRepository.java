@@ -110,14 +110,28 @@ public interface BookingRepository extends JpaRepository<Booking, Long>, JpaSpec
             FROM Booking booking
             JOIN FETCH booking.user
             JOIN FETCH booking.specialist specialist
-            JOIN FETCH booking.service
-            LEFT JOIN FETCH booking.office
+            JOIN FETCH booking.service service
+            LEFT JOIN FETCH booking.office office
             WHERE (:specialistId IS NULL OR specialist.id = :specialistId)
               AND booking.startsAt < :to
               AND booking.endsAt > :from
+              AND (:status IS NULL OR booking.status = :status)
+              AND (:officeId IS NULL OR office.id = :officeId)
+              AND (:serviceId IS NULL OR service.id = :serviceId)
             ORDER BY booking.startsAt ASC, booking.id ASC
             """)
-    List<Booking> findSpecialistBookings(Long specialistId, OffsetDateTime from, OffsetDateTime to);
+    List<Booking> findSpecialistBookings(
+            Long specialistId,
+            OffsetDateTime from,
+            OffsetDateTime to,
+            BookingStatus status,
+            Long officeId,
+            Long serviceId
+    );
+
+    default List<Booking> findSpecialistBookings(Long specialistId, OffsetDateTime from, OffsetDateTime to) {
+        return findSpecialistBookings(specialistId, from, to, null, null, null);
+    }
 
     @Query("""
             SELECT booking

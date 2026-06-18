@@ -2,7 +2,10 @@ package com.example.visceralmassageapi.schedule.controller;
 
 import com.example.visceralmassageapi.booking.dto.SpecialistBookingResponse;
 import com.example.visceralmassageapi.booking.dto.ManualBookingRequest;
+import com.example.visceralmassageapi.booking.domain.BookingStatus;
 import com.example.visceralmassageapi.booking.service.BookingService;
+import com.example.visceralmassageapi.schedule.domain.FixedEventEnrollmentStatus;
+import com.example.visceralmassageapi.schedule.domain.ScheduleBlockStatus;
 import com.example.visceralmassageapi.schedule.dto.SpecialistAvailabilityRequest;
 import com.example.visceralmassageapi.schedule.dto.SpecialistAvailabilityResponse;
 import com.example.visceralmassageapi.schedule.dto.DayPlanCopyRequest;
@@ -36,9 +39,12 @@ public class SpecialistScheduleController {
             Authentication authentication,
             @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME) OffsetDateTime from,
             @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME) OffsetDateTime to,
-            @RequestParam(required = false) Long specialistId
+            @RequestParam(required = false) Long specialistId,
+            @RequestParam(required = false) ScheduleBlockStatus status,
+            @RequestParam(required = false) Long officeId,
+            @RequestParam(required = false) Long serviceId
     ) {
-        return specialistScheduleService.listAvailability(currentUserId(authentication), from, to, specialistId);
+        return specialistScheduleService.listAvailability(currentUserId(authentication), from, to, specialistId, status, officeId, serviceId);
     }
 
     @GetMapping("/bookings")
@@ -46,9 +52,12 @@ public class SpecialistScheduleController {
             Authentication authentication,
             @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME) OffsetDateTime from,
             @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME) OffsetDateTime to,
-            @RequestParam(required = false) Long specialistId
+            @RequestParam(required = false) Long specialistId,
+            @RequestParam(required = false) BookingStatus status,
+            @RequestParam(required = false) Long officeId,
+            @RequestParam(required = false) Long serviceId
     ) {
-        return bookingService.listSpecialistBookings(currentUserId(authentication), from, to, specialistId);
+        return bookingService.listSpecialistBookings(currentUserId(authentication), from, to, specialistId, status, officeId, serviceId);
     }
 
     @GetMapping("/events")
@@ -56,9 +65,12 @@ public class SpecialistScheduleController {
             Authentication authentication,
             @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME) OffsetDateTime from,
             @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME) OffsetDateTime to,
-            @RequestParam(required = false) Long specialistId
+            @RequestParam(required = false) Long specialistId,
+            @RequestParam(required = false) Boolean active,
+            @RequestParam(required = false) Long officeId,
+            @RequestParam(required = false) Long serviceId
     ) {
-        return fixedEventService.listOwn(currentUserId(authentication), from, to, specialistId);
+        return fixedEventService.listOwn(currentUserId(authentication), from, to, specialistId, active, officeId, serviceId);
     }
 
     @GetMapping("/events/enrollments")
@@ -66,9 +78,13 @@ public class SpecialistScheduleController {
             Authentication authentication,
             @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME) OffsetDateTime from,
             @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME) OffsetDateTime to,
-            @RequestParam(required = false) Long specialistId
+            @RequestParam(required = false) Long specialistId,
+            @RequestParam(required = false) Boolean eventActive,
+            @RequestParam(required = false) FixedEventEnrollmentStatus status,
+            @RequestParam(required = false) Long officeId,
+            @RequestParam(required = false) Long serviceId
     ) {
-        return fixedEventService.listOwnEnrollments(currentUserId(authentication), from, to, specialistId);
+        return fixedEventService.listOwnEnrollments(currentUserId(authentication), from, to, specialistId, eventActive, status, officeId, serviceId);
     }
 
     @PostMapping("/events")

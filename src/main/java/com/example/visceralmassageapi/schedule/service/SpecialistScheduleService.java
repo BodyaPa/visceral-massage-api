@@ -60,6 +60,19 @@ public class SpecialistScheduleService {
 
     @Transactional(readOnly = true)
     public List<SpecialistAvailabilityResponse> listAvailability(long actorId, OffsetDateTime from, OffsetDateTime to, Long requestedSpecialistId) {
+        return listAvailability(actorId, from, to, requestedSpecialistId, null, null, null);
+    }
+
+    @Transactional(readOnly = true)
+    public List<SpecialistAvailabilityResponse> listAvailability(
+            long actorId,
+            OffsetDateTime from,
+            OffsetDateTime to,
+            Long requestedSpecialistId,
+            ScheduleBlockStatus status,
+            Long officeId,
+            Long serviceId
+    ) {
         validateQueryRange(from, to);
         Long managedSpecialistId = resolveManagedSpecialistIdForListing(actorId, requestedSpecialistId);
 
@@ -67,7 +80,7 @@ public class SpecialistScheduleService {
                 ? Set.copyOf(bookingRepository.findBookedAvailabilityBlockIds(from, to))
                 : Set.copyOf(bookingRepository.findBookedAvailabilityBlockIds(managedSpecialistId, from, to));
 
-        return availabilityBlockRepository.findManagedRange(managedSpecialistId, from, to)
+        return availabilityBlockRepository.findManagedRange(managedSpecialistId, from, to, status, officeId, serviceId)
                 .stream()
                 .map(block -> toResponse(block, bookedBlockIds.contains(block.getId())))
                 .toList();
@@ -179,6 +192,16 @@ public class SpecialistScheduleService {
             throw new BadRequestException("Schedule block overlaps an existing block");
         }
 
+        validateConcreteScheduleItemConflicts(
+                specialistId,
+                null,
+                request.officeId(),
+                request.status(),
+                itemType,
+                request.startsAt(),
+                request.endsAt()
+        );
+
         if (request.status() == ScheduleBlockStatus.BLOCKED) {
             validateBlockedRangeDoesNotCoverCommitments(specialistId, request.startsAt(), request.endsAt());
         }
@@ -228,6 +251,16 @@ public class SpecialistScheduleService {
             throw new BadRequestException("Schedule block overlaps an existing block");
         }
 
+        validateConcreteScheduleItemConflicts(
+                specialistId,
+                blockId,
+                request.officeId(),
+                request.status(),
+                itemType,
+                request.startsAt(),
+                request.endsAt()
+        );
+
         if (request.status() == ScheduleBlockStatus.BLOCKED) {
             validateBlockedRangeDoesNotCoverCommitments(specialistId, request.startsAt(), request.endsAt());
         }
@@ -255,6 +288,38 @@ public class SpecialistScheduleService {
 
         if (fixedEventRepository.overlapsActiveForSpecialist(specialistId, null, startsAt, endsAt)) {
             throw new BadRequestException("Blocked time overlaps an active event");
+        }
+    }
+
+    private void validateConcreteScheduleItemConflicts(
+            long specialistId,
+            Long excludedBlockId,
+            Long officeId,
+            ScheduleBlockStatus status,
+            ScheduleBlockType itemType,
+            OffsetDateTime startsAt,
+            OffsetDateTime endsAt
+    ) {
+        if (itemType == ScheduleBlockType.APPOINTMENT_SLOT
+                && availabilityBlockRepository.overlapsBlockedForAvailability(
+                        specialistId,
+                        officeId,
+                        excludedBlockId,
+                        startsAt,
+                        endsAt
+                )) {
+            throw new BadRequestException("Appointment slot overlaps blocked time");
+        }
+
+        if (status == ScheduleBlockStatus.BLOCKED
+                && availabilityBlockRepository.overlapsAppointmentSlotForAvailability(
+                        specialistId,
+                        officeId,
+                        excludedBlockId,
+                        startsAt,
+                        endsAt
+                )) {
+            throw new BadRequestException("Blocked time overlaps an appointment slot");
         }
     }
 

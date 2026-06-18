@@ -45,9 +45,23 @@ public interface SpecialistAvailabilityBlockRepository extends JpaRepository<Spe
             WHERE (:specialistId IS NULL OR specialist.id = :specialistId)
               AND block.startsAt < :to
               AND block.endsAt > :from
+              AND (:status IS NULL OR block.status = :status)
+              AND (:officeId IS NULL OR block.office.id = :officeId)
+              AND (:serviceId IS NULL OR block.service.id = :serviceId)
             ORDER BY block.startsAt ASC, block.id ASC
             """)
-    List<SpecialistAvailabilityBlock> findManagedRange(Long specialistId, OffsetDateTime from, OffsetDateTime to);
+    List<SpecialistAvailabilityBlock> findManagedRange(
+            Long specialistId,
+            OffsetDateTime from,
+            OffsetDateTime to,
+            com.example.visceralmassageapi.schedule.domain.ScheduleBlockStatus status,
+            Long officeId,
+            Long serviceId
+    );
+
+    default List<SpecialistAvailabilityBlock> findManagedRange(Long specialistId, OffsetDateTime from, OffsetDateTime to) {
+        return findManagedRange(specialistId, from, to, null, null, null);
+    }
 
     @Query("""
             SELECT block
@@ -158,6 +172,7 @@ public interface SpecialistAvailabilityBlockRepository extends JpaRepository<Spe
             LEFT JOIN block.office office
             WHERE block.specialist.id = :specialistId
               AND block.status = com.example.visceralmassageapi.schedule.domain.ScheduleBlockStatus.BLOCKED
+              AND (:excludedId IS NULL OR block.id <> :excludedId)
               AND block.startsAt < :endsAt
               AND block.endsAt > :startsAt
               AND (office IS NULL OR :officeId IS NULL OR office.id = :officeId)
@@ -165,6 +180,26 @@ public interface SpecialistAvailabilityBlockRepository extends JpaRepository<Spe
     boolean overlapsBlockedForAvailability(
             long specialistId,
             Long officeId,
+            Long excludedId,
+            OffsetDateTime startsAt,
+            OffsetDateTime endsAt
+    );
+
+    @Query("""
+            SELECT COUNT(block) > 0
+            FROM SpecialistAvailabilityBlock block
+            LEFT JOIN block.office office
+            WHERE block.specialist.id = :specialistId
+              AND block.itemType = com.example.visceralmassageapi.schedule.domain.ScheduleBlockType.APPOINTMENT_SLOT
+              AND (:excludedId IS NULL OR block.id <> :excludedId)
+              AND block.startsAt < :endsAt
+              AND block.endsAt > :startsAt
+              AND (office IS NULL OR :officeId IS NULL OR office.id = :officeId)
+            """)
+    boolean overlapsAppointmentSlotForAvailability(
+            long specialistId,
+            Long officeId,
+            Long excludedId,
             OffsetDateTime startsAt,
             OffsetDateTime endsAt
     );

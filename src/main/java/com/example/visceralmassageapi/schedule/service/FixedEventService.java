@@ -185,9 +185,22 @@ public class FixedEventService {
 
     @Transactional(readOnly = true)
     public List<SpecialistFixedEventResponse> listOwn(long actorId, OffsetDateTime from, OffsetDateTime to, Long requestedSpecialistId) {
+        return listOwn(actorId, from, to, requestedSpecialistId, null, null, null);
+    }
+
+    @Transactional(readOnly = true)
+    public List<SpecialistFixedEventResponse> listOwn(
+            long actorId,
+            OffsetDateTime from,
+            OffsetDateTime to,
+            Long requestedSpecialistId,
+            Boolean active,
+            Long officeId,
+            Long serviceId
+    ) {
         validateRange(from, to);
         Long specialistId = resolveManagedSpecialistIdForListing(actorId, requestedSpecialistId);
-        return fixedEventRepository.findManagedRange(specialistId, from, to)
+        return fixedEventRepository.findManagedRange(specialistId, from, to, active, officeId, serviceId)
                 .stream()
                 .map(this::toSpecialistResponse)
                 .toList();
@@ -200,9 +213,23 @@ public class FixedEventService {
 
     @Transactional(readOnly = true)
     public List<SpecialistFixedEventEnrollmentResponse> listOwnEnrollments(long actorId, OffsetDateTime from, OffsetDateTime to, Long requestedSpecialistId) {
+        return listOwnEnrollments(actorId, from, to, requestedSpecialistId, null, null, null, null);
+    }
+
+    @Transactional(readOnly = true)
+    public List<SpecialistFixedEventEnrollmentResponse> listOwnEnrollments(
+            long actorId,
+            OffsetDateTime from,
+            OffsetDateTime to,
+            Long requestedSpecialistId,
+            Boolean eventActive,
+            FixedEventEnrollmentStatus status,
+            Long officeId,
+            Long serviceId
+    ) {
         validateRange(from, to);
         Long specialistId = resolveManagedSpecialistIdForListing(actorId, requestedSpecialistId);
-        return fixedEventEnrollmentRepository.findForSpecialistEvents(specialistId, from, to)
+        return fixedEventEnrollmentRepository.findForSpecialistEvents(specialistId, from, to, eventActive, status, officeId, serviceId)
                 .stream()
                 .map(this::toSpecialistEnrollmentResponse)
                 .toList();
