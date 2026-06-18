@@ -51,6 +51,7 @@ public class WebSecurityConfig {
                         // public content
                         .requestMatchers(HttpMethod.GET, "/api/news/**").permitAll()
                         .requestMatchers(HttpMethod.GET, "/api/pages/**").permitAll()
+                        .requestMatchers(HttpMethod.GET, "/api/site-settings").permitAll()
                         .requestMatchers(HttpMethod.GET, "/api/services/**").permitAll()
                         .requestMatchers(HttpMethod.GET, "/api/offices/**").permitAll()
                         .requestMatchers(HttpMethod.GET, "/api/schedule/**").permitAll()

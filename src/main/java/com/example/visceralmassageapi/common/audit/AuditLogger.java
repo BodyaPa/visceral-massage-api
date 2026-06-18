@@ -54,4 +54,8 @@ public class AuditLogger {
     public void financeSettingsUpdated(long actorId) {
         log.info("audit event=finance_settings_updated actorId={}", actorId);
     }
+
+    public void siteSettingsUpdated(long actorId) {
+        log.info("audit event=site_settings_updated actorId={}", actorId);
+    }
 }
