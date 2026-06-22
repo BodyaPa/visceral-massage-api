@@ -96,6 +96,10 @@ public class SpecialistScheduleService {
             Long serviceId
     ) {
         validateQueryRange(from, to);
+        OffsetDateTime effectiveFrom = max(from, OffsetDateTime.now());
+        if (!effectiveFrom.isBefore(to)) {
+            return List.of();
+        }
 
         if (serviceId != null) {
             ServiceOffering service = serviceOfferingRepository.findById(serviceId)
@@ -109,16 +113,16 @@ public class SpecialistScheduleService {
                 throw new BadRequestException("Service does not use individual appointment slots");
             }
 
-            return availabilityBlockRepository.findPublicAvailabilityBlocks(from, to, officeId, specialistId)
+            return availabilityBlockRepository.findPublicAvailabilityBlocks(effectiveFrom, to, officeId, specialistId)
                     .stream()
                     .filter(block -> isCompatibleWithService(block, service))
-                    .flatMap(block -> toPublicServiceSlots(block, service, from, to).stream())
+                    .flatMap(block -> toPublicServiceSlots(block, service, effectiveFrom, to).stream())
                     .toList();
         }
 
-        return availabilityBlockRepository.findPublicAvailabilityBlocks(from, to, officeId, specialistId)
+        return availabilityBlockRepository.findPublicAvailabilityBlocks(effectiveFrom, to, officeId, specialistId)
                 .stream()
-                .flatMap(block -> toPublicOpenRanges(block, from, to).stream())
+                .flatMap(block -> toPublicOpenRanges(block, effectiveFrom, to).stream())
                 .toList();
     }
 

@@ -64,7 +64,12 @@ public class FixedEventService {
             ServiceLocale locale
     ) {
         validateRange(from, to);
-        List<FixedEvent> events = fixedEventRepository.findPublicRange(from, to, officeId, specialistId, serviceId);
+        OffsetDateTime effectiveFrom = max(from, OffsetDateTime.now());
+        if (!effectiveFrom.isBefore(to)) {
+            return List.of();
+        }
+
+        List<FixedEvent> events = fixedEventRepository.findPublicRange(effectiveFrom, to, officeId, specialistId, serviceId);
         List<Long> eventIds = events.stream().map(FixedEvent::getId).toList();
         Map<Long, Integer> enrollmentCounts = new HashMap<>();
         Set<Long> enrolledEventIds = new HashSet<>();
@@ -293,6 +298,13 @@ public class FixedEventService {
         return toSpecialistResponse(event);
     }
 
+    @Transactional
+    public int deactivatePastEventsWithoutEnrollments(OffsetDateTime now) {
+        List<FixedEvent> events = fixedEventRepository.findPastActiveEventsWithoutActiveEnrollments(now);
+        events.forEach(event -> event.setActive(false));
+        return events.size();
+    }
+
     private long resolveManagedSpecialistId(long actorId, Long requestedSpecialistId) {
         User actor = userRepository.findById(actorId)
                 .orElseThrow(() -> new NotFoundException("Specialist not found"));
@@ -358,6 +370,10 @@ public class FixedEventService {
         if (ChronoUnit.DAYS.between(from, to) > MAX_QUERY_DAYS) {
             throw new BadRequestException("Event range is too large");
         }
+    }
+
+    private OffsetDateTime max(OffsetDateTime first, OffsetDateTime second) {
+        return first.isAfter(second) ? first : second;
     }
 
     private boolean hasEventTimeChanged(FixedEvent event, SpecialistFixedEventRequest request) {

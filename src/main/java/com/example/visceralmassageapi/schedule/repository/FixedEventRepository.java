@@ -107,4 +107,18 @@ public interface FixedEventRepository extends JpaRepository<FixedEvent, Long> {
               AND event.endsAt > :startsAt
             """)
     boolean overlapsActiveForSpecialist(long specialistId, Long excludedId, OffsetDateTime startsAt, OffsetDateTime endsAt);
+
+    @Query("""
+            SELECT event
+            FROM FixedEvent event
+            WHERE event.active = true
+              AND event.endsAt <= :now
+              AND NOT EXISTS (
+                  SELECT enrollment.id
+                  FROM FixedEventEnrollment enrollment
+                  WHERE enrollment.event = event
+                    AND enrollment.status = com.example.visceralmassageapi.schedule.domain.FixedEventEnrollmentStatus.ACTIVE
+              )
+            """)
+    List<FixedEvent> findPastActiveEventsWithoutActiveEnrollments(OffsetDateTime now);
 }
