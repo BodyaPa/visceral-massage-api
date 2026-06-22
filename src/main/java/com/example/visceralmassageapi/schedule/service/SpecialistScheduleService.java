@@ -3,6 +3,7 @@ package com.example.visceralmassageapi.schedule.service;
 import com.example.visceralmassageapi.auth.domain.User;
 import com.example.visceralmassageapi.auth.domain.UserRole;
 import com.example.visceralmassageapi.auth.repo.UserRepository;
+import com.example.visceralmassageapi.auth.service.AuthService;
 import com.example.visceralmassageapi.booking.repository.BookingRepository;
 import com.example.visceralmassageapi.booking.domain.Booking;
 import com.example.visceralmassageapi.common.config.ScheduleProps;
@@ -666,6 +667,8 @@ public class SpecialistScheduleService {
                 block.getId(),
                 specialist.getId(),
                 specialistName,
+                specialist.getAvatarMediaId(),
+                AuthService.avatarUrl(specialist),
                 office == null ? null : office.getId(),
                 office == null ? null : office.getName(),
                 office == null ? null : office.getAddress(),
@@ -948,6 +951,8 @@ public class SpecialistScheduleService {
                 block.getId(),
                 specialist.getId(),
                 specialistDisplayName(specialist),
+                specialist.getAvatarMediaId(),
+                AuthService.avatarUrl(specialist),
                 office == null ? null : office.getId(),
                 office == null ? null : office.getName(),
                 office == null ? null : office.getAddress(),

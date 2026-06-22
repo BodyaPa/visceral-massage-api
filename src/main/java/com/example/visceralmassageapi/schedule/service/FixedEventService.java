@@ -3,6 +3,7 @@ package com.example.visceralmassageapi.schedule.service;
 import com.example.visceralmassageapi.auth.domain.User;
 import com.example.visceralmassageapi.auth.domain.UserRole;
 import com.example.visceralmassageapi.auth.repo.UserRepository;
+import com.example.visceralmassageapi.auth.service.AuthService;
 import com.example.visceralmassageapi.booking.repository.BookingRepository;
 import com.example.visceralmassageapi.common.config.ScheduleProps;
 import com.example.visceralmassageapi.common.exception.BadRequestException;
@@ -433,6 +434,8 @@ public class FixedEventService {
                 locale == ServiceLocale.EN && service.getDescriptionEn() != null ? service.getDescriptionEn() : service.getDescriptionUa(),
                 specialist.getId(),
                 specialistDisplayName(specialist),
+                specialist.getAvatarMediaId(),
+                AuthService.avatarUrl(specialist),
                 office == null ? null : office.getId(),
                 office == null ? null : office.getName(),
                 office == null ? null : office.getAddress(),

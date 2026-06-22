@@ -12,6 +12,8 @@ public record PublicFixedEventResponse(
         String description,
         long specialistId,
         String specialistName,
+        UUID specialistAvatarMediaId,
+        String specialistAvatarMediaUrl,
         Long officeId,
         String officeName,
         String officeAddress,

@@ -7,6 +7,7 @@ import lombok.Getter;
 import java.time.LocalDate;
 import java.time.OffsetDateTime;
 import java.util.Set;
+import java.util.UUID;
 
 @Getter
 @AllArgsConstructor
@@ -17,6 +18,8 @@ public class AdminUserDto {
     private String firstName;
     private String lastName;
     private LocalDate dateOfBirth;
+    private UUID avatarMediaId;
+    private String avatarMediaUrl;
     private boolean enabled;
     private Set<UserRole> roles;
     private OffsetDateTime createdAt;

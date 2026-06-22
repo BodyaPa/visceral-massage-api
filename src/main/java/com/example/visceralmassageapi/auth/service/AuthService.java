@@ -22,6 +22,7 @@ import com.example.visceralmassageapi.common.config.CookieProps;
 import com.example.visceralmassageapi.common.exception.BadRequestException;
 import com.example.visceralmassageapi.common.exception.NotFoundException;
 import com.example.visceralmassageapi.common.security.JwtService;
+import com.example.visceralmassageapi.media.service.MediaService;
 import com.example.visceralmassageapi.notifications.service.NotificationService;
 import io.jsonwebtoken.JwtException;
 import lombok.RequiredArgsConstructor;
@@ -29,6 +30,7 @@ import org.springframework.http.ResponseCookie;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.web.multipart.MultipartFile;
 
 import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
@@ -68,6 +70,7 @@ public class AuthService {
     private final CookieProps cookieProps;
     private final AuditLogger auditLogger;
     private final NotificationService notificationService;
+    private final MediaService mediaService;
     private final SecureRandom secureRandom = new SecureRandom();
 
     @Transactional
@@ -295,8 +298,7 @@ public class AuthService {
             user.setPhone(contact.value());
         }
         token.setUsedAt(now);
-        return new UserDto(user.getId(), user.getPhone(), user.getEmail(),
-                user.getFirstName(), user.getLastName(), user.getDateOfBirth(), effectiveRoles(user));
+        return toDto(user);
     }
 
     @Transactional
@@ -491,16 +493,14 @@ public class AuthService {
 
     public record AuthResult(User user, ResponseCookie accessCookie, ResponseCookie refreshCookie) {
         public UserDto userDto() {
-            return new UserDto(user.getId(), user.getPhone(), user.getEmail(),
-                    user.getFirstName(), user.getLastName(), user.getDateOfBirth(), effectiveRoles(user));
+            return toDto(user);
         }
     }
 
     public UserDto me(long userId) {
         User u = userRepository.findById(userId)
                 .orElseThrow(() -> new NotFoundException("User not found"));
-        return new UserDto(u.getId(), u.getPhone(), u.getEmail(),
-                u.getFirstName(), u.getLastName(), u.getDateOfBirth(), effectiveRoles(u));
+        return toDto(u);
     }
 
     @Transactional
@@ -510,8 +510,22 @@ public class AuthService {
         user.setFirstName(normalizeName(request.getFirstName()));
         user.setLastName(normalizeName(request.getLastName()));
         user.setDateOfBirth(request.getDateOfBirth());
-        return new UserDto(user.getId(), user.getPhone(), user.getEmail(),
-                user.getFirstName(), user.getLastName(), user.getDateOfBirth(), effectiveRoles(user));
+        return toDto(user);
+    }
+
+    @Transactional
+    public UserDto updateAvatar(long userId, MultipartFile file) {
+        User user = userRepository.findById(userId)
+                .orElseThrow(() -> new NotFoundException("User not found"));
+        String contentType = file == null || file.getContentType() == null
+                ? null
+                : file.getContentType().toLowerCase(Locale.ROOT);
+        if (!Set.of("image/jpeg", "image/png", "image/webp").contains(contentType)) {
+            throw new BadRequestException("Avatar must be a JPEG, PNG, or WebP image");
+        }
+        var asset = mediaService.upload(file, userId);
+        user.setAvatarMediaId(asset.id());
+        return toDto(user);
     }
 
     private static Set<UserRole> effectiveRoles(User user) {
@@ -519,6 +533,24 @@ public class AuthService {
             return user.getRoles();
         }
         return Set.of(UserRole.USER);
+    }
+
+    private static UserDto toDto(User user) {
+        return new UserDto(
+                user.getId(),
+                user.getPhone(),
+                user.getEmail(),
+                user.getFirstName(),
+                user.getLastName(),
+                user.getDateOfBirth(),
+                user.getAvatarMediaId(),
+                avatarUrl(user),
+                effectiveRoles(user)
+        );
+    }
+
+    public static String avatarUrl(User user) {
+        return user.getAvatarMediaId() == null ? null : "/api/users/" + user.getId() + "/avatar/" + user.getAvatarMediaId() + "/content";
     }
 
     private static Set<String> roleNames(Set<UserRole> roles) {

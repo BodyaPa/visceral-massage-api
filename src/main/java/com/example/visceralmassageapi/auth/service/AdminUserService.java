@@ -80,6 +80,8 @@ public class AdminUserService {
                 user.getFirstName(),
                 user.getLastName(),
                 user.getDateOfBirth(),
+                user.getAvatarMediaId(),
+                AuthService.avatarUrl(user),
                 user.isEnabled(),
                 orderedRoles(user.getRoles()),
                 user.getCreatedAt(),

@@ -18,11 +18,13 @@ import jakarta.servlet.http.HttpServletResponse;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpHeaders;
+import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 import org.springframework.security.core.Authentication;
 import org.springframework.security.web.csrf.CookieCsrfTokenRepository;
 import org.springframework.security.web.csrf.CsrfToken;
+import org.springframework.web.multipart.MultipartFile;
 
 
 @RestController
@@ -111,6 +113,11 @@ public class AuthController {
     @PutMapping("/me")
     public UserDto updateMe(Authentication authentication, @Valid @RequestBody ProfileUpdateRequest request) {
         return authService.updateProfile(currentUserId(authentication), request);
+    }
+
+    @PostMapping(path = "/me/avatar", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
+    public UserDto updateAvatar(Authentication authentication, @RequestPart("file") MultipartFile file) {
+        return authService.updateAvatar(currentUserId(authentication), file);
     }
 
     @PostMapping("/me/contact-change/request")

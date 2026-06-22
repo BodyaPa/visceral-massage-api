@@ -6,6 +6,7 @@ import lombok.Getter;
 
 import java.time.LocalDate;
 import java.util.Set;
+import java.util.UUID;
 
 @Getter
 @AllArgsConstructor
@@ -16,5 +17,7 @@ public class UserDto {
     private String firstName;
     private String lastName;
     private LocalDate dateOfBirth;
+    private UUID avatarMediaId;
+    private String avatarMediaUrl;
     private Set<UserRole> roles;
 }

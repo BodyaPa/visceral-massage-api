@@ -8,6 +8,7 @@ import java.time.LocalDate;
 import java.time.OffsetDateTime;
 import java.util.HashSet;
 import java.util.Set;
+import java.util.UUID;
 
 @Getter
 @Setter
@@ -33,6 +34,9 @@ public class User {
 
     @Column(name = "date_of_birth")
     private LocalDate dateOfBirth;
+
+    @Column(name = "avatar_media_id")
+    private UUID avatarMediaId;
 
     @Column(name = "password_hash", nullable = false, length = 255)
     private String passwordHash;

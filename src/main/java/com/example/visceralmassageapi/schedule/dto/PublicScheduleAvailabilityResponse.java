@@ -7,6 +7,8 @@ public record PublicScheduleAvailabilityResponse(
         long id,
         long specialistId,
         String specialistName,
+        UUID specialistAvatarMediaId,
+        String specialistAvatarMediaUrl,
         Long officeId,
         String officeName,
         String officeAddress,
