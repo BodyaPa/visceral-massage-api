@@ -183,6 +183,7 @@ class SpecialistScheduleManagementIT extends IntegrationTestBase {
         long blockId = objectMapper.readTree(createResult.getResponse().getContentAsString()).path("id").asLong();
 
         mvc.perform(get("/api/schedule/availability")
+                        .cookie(specialistCookies)
                         .param("from", "2030-02-03T00:00:00Z")
                         .param("to", "2030-02-04T00:00:00Z")
                         .param("serviceId", String.valueOf(service.getId())))
@@ -192,6 +193,7 @@ class SpecialistScheduleManagementIT extends IntegrationTestBase {
                 .andExpect(jsonPath("$[0].endsAt").value("2030-02-03T09:00:00Z"));
 
         mvc.perform(get("/api/schedule/availability")
+                        .cookie(specialistCookies)
                         .param("from", "2030-02-03T00:00:00Z")
                         .param("to", "2030-02-04T00:00:00Z")
                         .param("serviceId", String.valueOf(otherService.getId())))
@@ -418,6 +420,7 @@ class SpecialistScheduleManagementIT extends IntegrationTestBase {
         createAvailability(specialistCookies, officeId, "BLOCKED", "2030-04-02T12:00:00Z", "2030-04-02T14:00:00Z");
 
         mvc.perform(get("/api/schedule/availability")
+                        .cookie(specialistCookies)
                         .param("from", "2030-04-01T00:00:00Z")
                         .param("to", "2030-04-08T00:00:00Z")
                         .param("officeId", String.valueOf(officeId)))

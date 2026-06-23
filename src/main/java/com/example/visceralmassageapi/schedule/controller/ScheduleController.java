@@ -34,28 +34,33 @@ public class ScheduleController {
     private final ScheduleProps scheduleProps;
 
     @GetMapping("/config")
-    public ScheduleConfigResponse config() {
+    public ScheduleConfigResponse config(Authentication authentication) {
+        requireAuthenticated(authentication);
         return new ScheduleConfigResponse(scheduleProps.getAppointmentBufferMinutes());
     }
 
     @GetMapping("/availability")
     public List<PublicScheduleAvailabilityResponse> listPublicAvailability(
+            Authentication authentication,
             @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME) OffsetDateTime from,
             @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME) OffsetDateTime to,
             @RequestParam(required = false) Long officeId,
             @RequestParam(required = false) Long specialistId,
             @RequestParam(required = false) Long serviceId
     ) {
+        requireAuthenticated(authentication);
         return specialistScheduleService.listPublicAvailability(from, to, officeId, specialistId, serviceId);
     }
 
     @GetMapping("/unavailable")
     public List<PublicScheduleUnavailableResponse> listPublicUnavailable(
+            Authentication authentication,
             @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME) OffsetDateTime from,
             @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME) OffsetDateTime to,
             @RequestParam(required = false) Long officeId,
             @RequestParam(required = false) Long specialistId
     ) {
+        requireAuthenticated(authentication);
         return specialistScheduleService.listPublicUnavailable(from, to, officeId, specialistId);
     }
 
@@ -75,7 +80,7 @@ public class ScheduleController {
                 officeId,
                 specialistId,
                 serviceId,
-                currentUserIdOrNull(authentication),
+                currentUserId(authentication),
                 ServiceLocale.from(lang)
         );
     }
@@ -109,11 +114,8 @@ public class ScheduleController {
         return ResponseEntity.ok(fixedEventService.cancelEnrollment(id, currentUserId(authentication), ServiceLocale.from(lang)));
     }
 
-    private Long currentUserIdOrNull(Authentication authentication) {
-        if (authentication == null || !(authentication.getPrincipal() instanceof Long userId)) {
-            return null;
-        }
-        return userId;
+    private void requireAuthenticated(Authentication authentication) {
+        currentUserId(authentication);
     }
 
     private long currentUserId(Authentication authentication) {

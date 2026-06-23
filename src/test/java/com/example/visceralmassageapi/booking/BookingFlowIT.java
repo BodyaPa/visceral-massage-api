@@ -93,6 +93,7 @@ class BookingFlowIT extends IntegrationTestBase {
                 .andExpect(jsonPath("$.reminderOptIn").value(true));
 
         mvc.perform(get("/api/schedule/availability")
+                        .cookie(userCookies)
                         .param("from", "2031-01-01T00:00:00Z")
                         .param("to", "2031-02-01T00:00:00Z")
                         .param("officeId", String.valueOf(officeId)))
@@ -137,6 +138,7 @@ class BookingFlowIT extends IntegrationTestBase {
         );
 
         mvc.perform(get("/api/schedule/availability")
+                        .cookie(firstUserCookies)
                         .param("from", "2031-03-02T00:00:00Z")
                         .param("to", "2031-03-03T00:00:00Z")
                         .param("officeId", String.valueOf(officeId))
@@ -171,6 +173,7 @@ class BookingFlowIT extends IntegrationTestBase {
                 .andExpect(jsonPath("$.endsAt").value("2031-03-02T10:00:00Z"));
 
         mvc.perform(get("/api/schedule/availability")
+                        .cookie(firstUserCookies)
                         .param("from", "2031-03-02T00:00:00Z")
                         .param("to", "2031-03-03T00:00:00Z")
                         .param("officeId", String.valueOf(officeId))
@@ -240,6 +243,7 @@ class BookingFlowIT extends IntegrationTestBase {
         long slotId = objectMapper.readTree(slotResult.getResponse().getContentAsString()).path("id").asLong();
 
         mvc.perform(get("/api/schedule/availability")
+                        .cookie(userCookies)
                         .param("from", "2031-08-02T00:00:00Z")
                         .param("to", "2031-08-03T00:00:00Z")
                         .param("officeId", String.valueOf(officeId))
@@ -251,6 +255,7 @@ class BookingFlowIT extends IntegrationTestBase {
                 .andExpect(jsonPath("$[1]").doesNotExist());
 
         mvc.perform(get("/api/schedule/availability")
+                        .cookie(userCookies)
                         .param("from", "2031-08-02T00:00:00Z")
                         .param("to", "2031-08-03T00:00:00Z")
                         .param("officeId", String.valueOf(officeId))
@@ -276,6 +281,7 @@ class BookingFlowIT extends IntegrationTestBase {
                 .andExpect(jsonPath("$.reminderOptIn").value(true));
 
         mvc.perform(get("/api/schedule/availability")
+                        .cookie(userCookies)
                         .param("from", "2031-08-02T00:00:00Z")
                         .param("to", "2031-08-03T00:00:00Z")
                         .param("officeId", String.valueOf(officeId))
@@ -354,6 +360,7 @@ class BookingFlowIT extends IntegrationTestBase {
                 .andExpect(status().isOk());
 
         mvc.perform(get("/api/schedule/availability")
+                        .cookie(userCookies)
                         .param("from", "2031-07-02T00:00:00Z")
                         .param("to", "2031-07-03T00:00:00Z")
                         .param("officeId", String.valueOf(officeId))
@@ -385,9 +392,33 @@ class BookingFlowIT extends IntegrationTestBase {
 
     @Test
     void publicScheduleConfigExposesAppointmentBufferMinutes() throws Exception {
-        mvc.perform(get("/api/schedule/config"))
+        Cookie[] userCookies = loginCookies(createUser());
+
+        mvc.perform(get("/api/schedule/config")
+                        .cookie(userCookies))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.appointmentBufferMinutes").value(30));
+    }
+
+    @Test
+    void anonymousCannotReadScheduleEndpoints() throws Exception {
+        mvc.perform(get("/api/schedule/config"))
+                .andExpect(status().isForbidden());
+
+        mvc.perform(get("/api/schedule/availability")
+                        .param("from", "2031-01-01T00:00:00Z")
+                        .param("to", "2031-01-02T00:00:00Z"))
+                .andExpect(status().isForbidden());
+
+        mvc.perform(get("/api/schedule/unavailable")
+                        .param("from", "2031-01-01T00:00:00Z")
+                        .param("to", "2031-01-02T00:00:00Z"))
+                .andExpect(status().isForbidden());
+
+        mvc.perform(get("/api/schedule/events")
+                        .param("from", "2031-01-01T00:00:00Z")
+                        .param("to", "2031-01-02T00:00:00Z"))
+                .andExpect(status().isForbidden());
     }
 
     @Test
@@ -425,6 +456,7 @@ class BookingFlowIT extends IntegrationTestBase {
         event = fixedEventRepository.save(event);
 
         mvc.perform(get("/api/schedule/unavailable")
+                        .cookie(userCookies)
                         .param("from", "2036-01-02T09:00:00Z")
                         .param("to", "2036-01-02T15:00:00Z")
                         .param("officeId", String.valueOf(officeId)))
@@ -808,6 +840,7 @@ class BookingFlowIT extends IntegrationTestBase {
                 .andExpect(jsonPath("$.status").value("CANCELLED"));
 
         mvc.perform(get("/api/schedule/availability")
+                        .cookie(userCookies)
                         .param("from", "2031-06-02T00:00:00Z")
                         .param("to", "2031-06-03T00:00:00Z")
                         .param("officeId", String.valueOf(officeId)))
@@ -907,6 +940,7 @@ class BookingFlowIT extends IntegrationTestBase {
         );
 
         mvc.perform(get("/api/schedule/availability")
+                        .cookie(firstUserCookies)
                         .param("from", "2031-04-02T00:00:00Z")
                         .param("to", "2031-04-03T00:00:00Z")
                         .param("officeId", String.valueOf(officeId))
@@ -918,6 +952,7 @@ class BookingFlowIT extends IntegrationTestBase {
                 .andExpect(jsonPath("$[1]").doesNotExist());
 
         mvc.perform(get("/api/schedule/unavailable")
+                        .cookie(firstUserCookies)
                         .param("from", "2031-04-02T00:00:00Z")
                         .param("to", "2031-04-03T00:00:00Z")
                         .param("officeId", String.valueOf(officeId)))
@@ -970,6 +1005,7 @@ class BookingFlowIT extends IntegrationTestBase {
                 .andExpect(status().isBadRequest());
 
         mvc.perform(get("/api/schedule/events")
+                        .cookie(firstUserCookies)
                         .param("from", "2031-04-01T00:00:00Z")
                         .param("to", "2031-04-08T00:00:00Z")
                         .param("serviceId", String.valueOf(eventService.getId())))
