@@ -104,6 +104,23 @@ class FinanceExpenseIT extends IntegrationTestBase {
                 .andExpect(status().isBadRequest());
     }
 
+    @Test
+    void financeManagerRoleIsIndependentFromMasterRole() throws Exception {
+        User financeOnly = createUserWithRoles(UserRole.FINANCE_MANAGER);
+        Cookie[] financeOnlyCookies = loginCookies(financeOnly.getPhone());
+        User masterOnly = createUserWithRoles(UserRole.MASTER);
+        Cookie[] masterOnlyCookies = loginCookies(masterOnly.getPhone());
+
+        mvc.perform(get("/api/admin/finance/settings").cookie(financeOnlyCookies))
+                .andExpect(status().isOk());
+
+        mvc.perform(get("/api/admin/users").cookie(financeOnlyCookies))
+                .andExpect(status().isForbidden());
+
+        mvc.perform(get("/api/admin/finance/settings").cookie(masterOnlyCookies))
+                .andExpect(status().isForbidden());
+    }
+
     private long createOffice() {
         Office office = new Office();
         office.setName("Finance Office " + SUFFIX.incrementAndGet());
@@ -113,6 +130,10 @@ class FinanceExpenseIT extends IntegrationTestBase {
     }
 
     private String createRegularUser() {
+        return createUserWithRoles().getPhone();
+    }
+
+    private User createUserWithRoles(UserRole... roles) {
         String phone = "+38097" + SUFFIX.incrementAndGet();
         User user = new User();
         user.setPhone(phone);
@@ -120,9 +141,11 @@ class FinanceExpenseIT extends IntegrationTestBase {
         user.setLastName("User");
         user.setPasswordHash(passwordEncoder.encode(OWNER_PASSWORD));
         user.getRoles().add(UserRole.USER);
+        for (UserRole role : roles) {
+            user.getRoles().add(role);
+        }
         user.setEnabled(true);
-        userRepository.save(user);
-        return phone;
+        return userRepository.save(user);
     }
 
     private Cookie[] loginCookies(String identifier) throws Exception {

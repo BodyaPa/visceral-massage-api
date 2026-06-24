@@ -458,6 +458,32 @@ class SpecialistScheduleManagementIT extends IntegrationTestBase {
     }
 
     @Test
+    void masterWithoutSpecialistRoleCannotAccessSpecialistScheduleWorkspace() throws Exception {
+        String masterOnlyPhone = uniquePhone();
+        createUserWithRoles(masterOnlyPhone, UserRole.MASTER);
+        Cookie[] masterOnlyCookies = loginCookies(masterOnlyPhone);
+
+        mvc.perform(get("/api/admin/schedule/availability")
+                        .cookie(masterOnlyCookies)
+                        .param("from", "2030-03-01T00:00:00Z")
+                        .param("to", "2030-03-08T00:00:00Z"))
+                .andExpect(status().isForbidden());
+
+        mvc.perform(post("/api/admin/schedule/availability")
+                        .with(csrf())
+                        .cookie(masterOnlyCookies)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {
+                                  "status":"AVAILABLE",
+                                  "startsAt":"2030-03-02T08:00:00Z",
+                                  "endsAt":"2030-03-02T12:00:00Z"
+                                }
+                                """))
+                .andExpect(status().isForbidden());
+    }
+
+    @Test
     void specialistCanCreateManualBookingOnlyForOwnAvailableBlock() throws Exception {
         Cookie[] specialistCookies = loginCookies(OWNER_PHONE);
         User specialist = userRepository.findByPhone(OWNER_PHONE).orElseThrow();

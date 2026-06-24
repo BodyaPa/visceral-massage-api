@@ -72,6 +72,7 @@ public interface SpecialistAvailabilityBlockRepository extends JpaRepository<Spe
             WHERE block.status = com.example.visceralmassageapi.schedule.domain.ScheduleBlockStatus.AVAILABLE
               AND block.startsAt < :to
               AND block.endsAt > :from
+              AND (office IS NULL OR office.active = true)
               AND (:officeId IS NULL OR office.id = :officeId)
               AND (:specialistId IS NULL OR specialist.id = :specialistId)
               AND NOT EXISTS (
@@ -98,6 +99,7 @@ public interface SpecialistAvailabilityBlockRepository extends JpaRepository<Spe
             WHERE block.status = com.example.visceralmassageapi.schedule.domain.ScheduleBlockStatus.AVAILABLE
               AND block.startsAt < :to
               AND block.endsAt > :from
+              AND (office IS NULL OR office.active = true)
               AND (:officeId IS NULL OR office.id = :officeId)
               AND (:specialistId IS NULL OR specialist.id = :specialistId)
             ORDER BY block.startsAt ASC, block.id ASC

@@ -496,6 +496,82 @@ class BookingFlowIT extends IntegrationTestBase {
     }
 
     @Test
+    void inactiveOfficeIsHiddenFromPublicScheduleAndCannotAcceptBookingsOrEnrollments() throws Exception {
+        Cookie[] specialistCookies = loginCookies(OWNER_PHONE);
+        Cookie[] userCookies = loginCookies(createUser());
+        User specialist = userRepository.findByPhone(OWNER_PHONE).orElseThrow();
+        long officeId = createOffice();
+        Office office = officeRepository.findById(officeId).orElseThrow();
+        long serviceId = createService(true);
+        long blockId = createAvailabilityWithRange(
+                specialistCookies,
+                officeId,
+                "2037-01-02T08:00:00Z",
+                "2037-01-02T10:00:00Z"
+        );
+
+        ServiceOffering eventService = new ServiceOffering();
+        eventService.setTitleUa("Подія в неактивному офісі " + PHONE_SUFFIX.incrementAndGet());
+        eventService.setDescriptionUa("Тест");
+        eventService.setDurationMinutes(60);
+        eventService.setBasePrice(BigDecimal.valueOf(700));
+        eventService.setBookingMode(ServiceBookingMode.FIXED_EVENT);
+        eventService.setActive(true);
+        eventService = serviceOfferingRepository.save(eventService);
+
+        FixedEvent event = new FixedEvent();
+        event.setService(eventService);
+        event.setSpecialist(specialist);
+        event.setOffice(office);
+        event.setStartsAt(OffsetDateTime.parse("2037-01-02T12:00:00Z"));
+        event.setEndsAt(OffsetDateTime.parse("2037-01-02T13:00:00Z"));
+        event.setCapacity(4);
+        event.setActive(true);
+        event = fixedEventRepository.save(event);
+
+        office.setActive(false);
+        officeRepository.save(office);
+
+        mvc.perform(get("/api/schedule/availability")
+                        .cookie(userCookies)
+                        .param("from", "2037-01-02T00:00:00Z")
+                        .param("to", "2037-01-03T00:00:00Z")
+                        .param("officeId", String.valueOf(officeId))
+                        .param("serviceId", String.valueOf(serviceId)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$").isEmpty());
+
+        mvc.perform(post("/api/bookings")
+                        .with(csrf())
+                        .cookie(userCookies)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {
+                                  "availabilityBlockId":%s,
+                                  "serviceId":%s,
+                                  "reminderOptIn":false
+                                }
+                                """.formatted(blockId, serviceId)))
+                .andExpect(status().isBadRequest());
+
+        mvc.perform(get("/api/schedule/events")
+                        .cookie(userCookies)
+                        .param("from", "2037-01-02T00:00:00Z")
+                        .param("to", "2037-01-03T00:00:00Z")
+                        .param("officeId", String.valueOf(officeId))
+                        .param("serviceId", String.valueOf(eventService.getId())))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$").isEmpty());
+
+        mvc.perform(post("/api/schedule/events/{id}/enroll", event.getId())
+                        .with(csrf())
+                        .cookie(userCookies)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"reminderOptIn\":false}"))
+                .andExpect(status().isBadRequest());
+    }
+
+    @Test
     void concurrentBookingRequestsCreateOnlyOneActiveBooking() throws Exception {
         Cookie[] specialistCookies = loginCookies(OWNER_PHONE);
         Cookie[] firstUserCookies = loginCookies(createUser());
@@ -637,11 +713,48 @@ class BookingFlowIT extends IntegrationTestBase {
                         .cookie(userCookies))
                 .andExpect(status().isForbidden());
 
+        mvc.perform(post("/api/admin/finance/bookings/{id}/specialist-payout/mark-paid", bookingId)
+                        .cookie(specialistCookies))
+                .andExpect(status().isForbidden());
+
+        mvc.perform(post("/api/admin/finance/bookings/{id}/specialist-payout/mark-paid", bookingId)
+                        .with(csrf())
+                        .cookie(specialistCookies))
+                .andExpect(status().isBadRequest());
+
         mvc.perform(post("/api/admin/finance/bookings/{id}/confirm-payment", bookingId)
                         .with(csrf())
                         .cookie(specialistCookies))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.status").value("CONFIRMED"));
+
+        mvc.perform(post("/api/admin/finance/bookings/{id}/confirm-payment", bookingId)
+                        .with(csrf())
+                        .cookie(specialistCookies))
+                .andExpect(status().isBadRequest());
+
+        long cancelledBlockId = createAvailabilityWithRange(
+                specialistCookies,
+                officeId,
+                "2035-05-11T08:00:00Z",
+                "2035-05-11T10:00:00Z"
+        );
+        long cancelledBookingId = createBooking(userCookies, cancelledBlockId, serviceId);
+        mvc.perform(post("/api/bookings/{id}/cancel", cancelledBookingId)
+                        .with(csrf())
+                        .cookie(userCookies))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.status").value("CANCELLED"));
+
+        mvc.perform(post("/api/admin/finance/bookings/{id}/confirm-payment", cancelledBookingId)
+                        .with(csrf())
+                        .cookie(specialistCookies))
+                .andExpect(status().isBadRequest());
+
+        mvc.perform(post("/api/admin/finance/bookings/{id}/specialist-payout/mark-paid", cancelledBookingId)
+                        .with(csrf())
+                        .cookie(specialistCookies))
+                .andExpect(status().isBadRequest());
 
         mvc.perform(get("/api/specialist/finance/overview")
                         .cookie(specialistCookies)
@@ -772,6 +885,18 @@ class BookingFlowIT extends IntegrationTestBase {
                         .cookie(financeCookies)
                         .param("expenseFrom", "2031-02-01")
                         .param("expenseTo", "2031-01-01"))
+                .andExpect(status().isBadRequest());
+
+        mvc.perform(get("/api/admin/finance/export/xlsx")
+                        .cookie(financeCookies)
+                        .param("from", "2031-02-01T00:00:00Z")
+                        .param("to", "2031-01-01T00:00:00Z"))
+                .andExpect(status().isBadRequest());
+
+        mvc.perform(get("/api/admin/finance/export/pdf")
+                        .cookie(financeCookies)
+                        .param("from", "2031-02-01T00:00:00Z")
+                        .param("to", "2031-01-01T00:00:00Z"))
                 .andExpect(status().isBadRequest());
     }
 
@@ -1015,6 +1140,12 @@ class BookingFlowIT extends IntegrationTestBase {
                 .andExpect(jsonPath("$[0].enrolled").value(false));
 
         mvc.perform(post("/api/schedule/events/{id}/enroll", event.getId())
+                        .cookie(firstUserCookies)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"reminderOptIn\":true}"))
+                .andExpect(status().isForbidden());
+
+        mvc.perform(post("/api/schedule/events/{id}/enroll", event.getId())
                         .with(csrf())
                         .cookie(firstUserCookies)
                         .contentType(MediaType.APPLICATION_JSON)
@@ -1061,6 +1192,15 @@ class BookingFlowIT extends IntegrationTestBase {
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("{\"reminderOptIn\":false}"))
                 .andExpect(status().isBadRequest());
+
+        mvc.perform(post("/api/schedule/events/{id}/cancel", event.getId())
+                        .with(csrf())
+                        .cookie(secondUserCookies))
+                .andExpect(status().isNotFound());
+
+        mvc.perform(post("/api/schedule/events/{id}/cancel", event.getId())
+                        .cookie(firstUserCookies))
+                .andExpect(status().isForbidden());
 
         mvc.perform(post("/api/schedule/events/{id}/cancel", event.getId())
                         .with(csrf())

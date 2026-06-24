@@ -22,6 +22,7 @@ public interface FixedEventRepository extends JpaRepository<FixedEvent, Long> {
               AND service.active = true
               AND event.startsAt < :to
               AND event.endsAt > :from
+              AND (office IS NULL OR office.active = true)
               AND (:officeId IS NULL OR office.id = :officeId)
               AND (:specialistId IS NULL OR specialist.id = :specialistId)
               AND (:serviceId IS NULL OR service.id = :serviceId)

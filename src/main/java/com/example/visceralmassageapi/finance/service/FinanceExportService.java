@@ -3,6 +3,7 @@ package com.example.visceralmassageapi.finance.service;
 import com.example.visceralmassageapi.booking.domain.Booking;
 import com.example.visceralmassageapi.booking.domain.BookingStatus;
 import com.example.visceralmassageapi.booking.repository.BookingRepository;
+import com.example.visceralmassageapi.common.exception.BadRequestException;
 import com.example.visceralmassageapi.finance.repository.SpecialistFinanceSettingsRepository;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
@@ -31,11 +32,13 @@ public class FinanceExportService {
 
     @Transactional(readOnly = true)
     public byte[] exportExcel(BookingStatus status, Long officeId, OffsetDateTime from, OffsetDateTime to, String locale) {
+        validateRange(from, to);
         return buildXlsx(rows(status, officeId, from, to, locale));
     }
 
     @Transactional(readOnly = true)
     public byte[] exportPdf(BookingStatus status, Long officeId, OffsetDateTime from, OffsetDateTime to, String locale) {
+        validateRange(from, to);
         List<List<String>> rows = rows(status, officeId, from, to, locale);
         List<String> lines = new ArrayList<>();
         lines.add("Ataraksia finance report");
@@ -91,6 +94,12 @@ public class FinanceExportService {
             ));
         }
         return rows;
+    }
+
+    private void validateRange(OffsetDateTime from, OffsetDateTime to) {
+        if (from != null && to != null && !to.isAfter(from)) {
+            throw new BadRequestException("Finance export range is invalid");
+        }
     }
 
     private String serviceTitle(Booking booking, String locale) {

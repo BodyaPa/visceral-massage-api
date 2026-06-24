@@ -42,7 +42,7 @@ class SiteSettingsIT extends IntegrationTestBase {
 
     @Test
     void publicCanReadSettingsAndOnlyMasterCanUpdateThem() throws Exception {
-        Cookie[] userCookies = loginCookies(createUser(UserRole.USER));
+        Cookie[] userCookies = loginCookies(createUser());
         Cookie[] masterCookies = loginCookies(OWNER_PHONE);
 
         mvc.perform(get("/api/site-settings"))
@@ -85,7 +85,41 @@ class SiteSettingsIT extends IntegrationTestBase {
                 .andExpect(jsonPath("$.homeIntroEn").value("Home intro"));
     }
 
-    private String createUser(UserRole role) {
+    @Test
+    void functionalRolesWithoutMasterCannotUpdateSiteSettings() throws Exception {
+        Cookie[] smmCookies = loginCookies(createUser(UserRole.SMM));
+        Cookie[] financeCookies = loginCookies(createUser(UserRole.FINANCE_MANAGER));
+        Cookie[] specialistCookies = loginCookies(createUser(UserRole.SPECIALIST));
+
+        mvc.perform(put("/api/admin/site-settings")
+                        .with(csrf())
+                        .cookie(smmCookies)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {"footerBodyUa":"SMM without MASTER"}
+                                """))
+                .andExpect(status().isForbidden());
+
+        mvc.perform(put("/api/admin/site-settings")
+                        .with(csrf())
+                        .cookie(financeCookies)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {"footerBodyUa":"Finance without MASTER"}
+                                """))
+                .andExpect(status().isForbidden());
+
+        mvc.perform(put("/api/admin/site-settings")
+                        .with(csrf())
+                        .cookie(specialistCookies)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {"footerBodyUa":"Specialist without MASTER"}
+                                """))
+                .andExpect(status().isForbidden());
+    }
+
+    private String createUser(UserRole... roles) {
         String phone = "+38099" + PHONE_SUFFIX.incrementAndGet();
         User user = new User();
         user.setPhone(phone);
@@ -93,7 +127,9 @@ class SiteSettingsIT extends IntegrationTestBase {
         user.setLastName("User");
         user.setPasswordHash(passwordEncoder.encode(OWNER_PASSWORD));
         user.getRoles().add(UserRole.USER);
-        user.getRoles().add(role);
+        for (UserRole role : roles) {
+            user.getRoles().add(role);
+        }
         user.setEnabled(true);
         userRepository.save(user);
         return phone;

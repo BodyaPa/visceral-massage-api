@@ -116,6 +116,10 @@ public class FixedEventService {
             throw new BadRequestException("Event is not available");
         }
 
+        if (event.getOffice() != null && !event.getOffice().isActive()) {
+            throw new BadRequestException("Event office is inactive");
+        }
+
         if (!event.getStartsAt().isAfter(OffsetDateTime.now())) {
             throw new BadRequestException("Event has already started");
         }

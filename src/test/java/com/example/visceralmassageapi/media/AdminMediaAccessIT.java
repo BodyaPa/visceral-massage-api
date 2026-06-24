@@ -1,6 +1,9 @@
 package com.example.visceralmassageapi.media;
 
 import com.example.visceralmassageapi.IntegrationTestBase;
+import com.example.visceralmassageapi.auth.domain.User;
+import com.example.visceralmassageapi.auth.domain.UserRole;
+import com.example.visceralmassageapi.auth.repo.UserRepository;
 import com.example.visceralmassageapi.notifications.service.NotificationService;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import jakarta.servlet.http.Cookie;
@@ -9,12 +12,14 @@ import org.mockito.ArgumentCaptor;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.MediaType;
 import org.springframework.mock.web.MockMultipartFile;
+import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.test.context.DynamicPropertyRegistry;
 import org.springframework.test.context.DynamicPropertySource;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.test.web.servlet.MockMvc;
 
 import java.util.Arrays;
+import java.util.concurrent.atomic.AtomicInteger;
 import java.util.regex.Pattern;
 
 import static org.mockito.Mockito.reset;
@@ -33,12 +38,15 @@ class AdminMediaAccessIT extends IntegrationTestBase {
 
     private static final String OWNER_PHONE = "+380000000099";
     private static final String OWNER_PASSWORD = "ConfiguredOwnerPassword123!";
+    private static final AtomicInteger PHONE_SUFFIX = new AtomicInteger(8000000);
     private static final byte[] PNG_BYTES = new byte[]{
             (byte) 0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a, 0x01, 0x02
     };
 
     @Autowired MockMvc mvc;
     @Autowired ObjectMapper objectMapper;
+    @Autowired UserRepository userRepository;
+    @Autowired PasswordEncoder passwordEncoder;
     @MockitoBean NotificationService notificationService;
 
     @DynamicPropertySource
@@ -67,6 +75,27 @@ class AdminMediaAccessIT extends IntegrationTestBase {
         Cookie[] adminCookies = loginAdminCookies();
 
         mvc.perform(multipart("/api/admin/media").file(validPng()).cookie(adminCookies))
+                .andExpect(status().isForbidden());
+    }
+
+    @Test
+    void smmCanUploadMediaButMasterWithoutSmmCannot() throws Exception {
+        User smm = createUserWithRoles(UserRole.SMM);
+        Cookie[] smmCookies = loginCookies(smm.getPhone());
+
+        mvc.perform(multipart("/api/admin/media")
+                        .file(validPng())
+                        .with(csrf())
+                        .cookie(smmCookies))
+                .andExpect(status().isCreated());
+
+        User masterOnly = createUserWithRoles(UserRole.MASTER);
+        Cookie[] masterCookies = loginCookies(masterOnly.getPhone());
+
+        mvc.perform(multipart("/api/admin/media")
+                        .file(validPng())
+                        .with(csrf())
+                        .cookie(masterCookies))
                 .andExpect(status().isForbidden());
     }
 
@@ -172,14 +201,32 @@ class AdminMediaAccessIT extends IntegrationTestBase {
     }
 
     private Cookie[] loginAdminCookies() throws Exception {
+        return loginCookies(OWNER_PHONE);
+    }
+
+    private Cookie[] loginCookies(String phone) throws Exception {
         return mvc.perform(post("/api/auth/login").with(csrf())
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("""
                                 {"identifier":"%s","password":"%s"}
-                                """.formatted(OWNER_PHONE, OWNER_PASSWORD)))
+                                """.formatted(phone, OWNER_PASSWORD)))
                 .andExpect(status().isOk())
                 .andReturn()
                 .getResponse()
                 .getCookies();
+    }
+
+    private User createUserWithRoles(UserRole... roles) {
+        User user = new User();
+        user.setPhone("+38098" + PHONE_SUFFIX.incrementAndGet());
+        user.setFirstName("Media");
+        user.setLastName("User");
+        user.setPasswordHash(passwordEncoder.encode(OWNER_PASSWORD));
+        user.getRoles().add(UserRole.USER);
+        for (UserRole role : roles) {
+            user.getRoles().add(role);
+        }
+        user.setEnabled(true);
+        return userRepository.save(user);
     }
 }
