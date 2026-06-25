@@ -316,6 +316,46 @@ class SpecialistScheduleManagementIT extends IntegrationTestBase {
     }
 
     @Test
+    void regularSpecialistCannotUpdateOrDeleteAnotherSpecialistAvailability() throws Exception {
+        Cookie[] ownerCookies = loginCookies(OWNER_PHONE);
+        User owner = userRepository.findByPhone(OWNER_PHONE).orElseThrow();
+        User regularSpecialist = createUserWithRoles(uniquePhone(), UserRole.SPECIALIST);
+        Cookie[] regularSpecialistCookies = loginCookies(regularSpecialist.getPhone());
+        SpecialistAvailabilityBlock ownerBlock = createAvailabilityEntity(
+                owner,
+                "2030-02-07T08:00:00Z",
+                "2030-02-07T10:00:00Z"
+        );
+
+        mvc.perform(put("/api/admin/schedule/availability/{id}", ownerBlock.getId())
+                        .with(csrf())
+                        .cookie(regularSpecialistCookies)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {
+                                  "status":"AVAILABLE",
+                                  "startsAt":"2030-02-07T09:00:00Z",
+                                  "endsAt":"2030-02-07T11:00:00Z",
+                                  "notes":"Cross-scope update"
+                                }
+                                """))
+                .andExpect(status().isForbidden());
+
+        mvc.perform(delete("/api/admin/schedule/availability/{id}", ownerBlock.getId())
+                        .with(csrf())
+                        .cookie(regularSpecialistCookies))
+                .andExpect(status().isForbidden());
+
+        mvc.perform(get("/api/admin/schedule/availability")
+                        .cookie(ownerCookies)
+                        .param("specialistId", String.valueOf(owner.getId()))
+                        .param("from", "2030-02-07T00:00:00Z")
+                        .param("to", "2030-02-08T00:00:00Z"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$[?(@.id == %s && @.startsAt == '2030-02-07T08:00:00Z')]".formatted(ownerBlock.getId())).exists());
+    }
+
+    @Test
     void specialistCanUpdateOwnAvailabilityAndOverlapValidationExcludesCurrentBlock() throws Exception {
         Cookie[] specialistCookies = loginCookies(OWNER_PHONE);
         long officeId = createOffice();
