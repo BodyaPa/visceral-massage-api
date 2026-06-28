@@ -30,6 +30,12 @@ public class SiteSettings {
     @Column(name = "home_intro_en", columnDefinition = "TEXT")
     private String homeIntroEn;
 
+    @Column(name = "home_body_ua", columnDefinition = "TEXT")
+    private String homeBodyUa;
+
+    @Column(name = "home_body_en", columnDefinition = "TEXT")
+    private String homeBodyEn;
+
     @Column(name = "about_body_ua", columnDefinition = "TEXT")
     private String aboutBodyUa;
 
@@ -41,6 +47,9 @@ public class SiteSettings {
 
     @Column(name = "contact_body_en", columnDefinition = "TEXT")
     private String contactBodyEn;
+
+    @Column(name = "hero_media_urls", columnDefinition = "TEXT")
+    private String heroMediaUrls;
 
     @ManyToOne
     @JoinColumn(name = "updated_by_user_id")

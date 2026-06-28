@@ -69,20 +69,27 @@ class SiteSettingsIT extends IntegrationTestBase {
                                   "footerBodyEn":"Updated footer",
                                   "homeIntroUa":"Головна: короткий вступ",
                                   "homeIntroEn":"Home intro",
+                                  "homeBodyUa":"Повний CMS текст головної",
+                                  "homeBodyEn":"Full CMS home body",
                                   "aboutBodyUa":"Про Ataraksia",
                                   "aboutBodyEn":"About Ataraksia",
                                   "contactBodyUa":"Контакти й графік",
-                                  "contactBodyEn":"Contacts and schedule"
+                                  "contactBodyEn":"Contacts and schedule",
+                                  "heroMediaUrls":" /api/media/1/content \\n/api/media/1/content\\n https://example.com/hero.jpg "
                                 }
                                 """))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.footerBodyUa").value("Оновлений підвал"))
+                .andExpect(jsonPath("$.homeBodyEn").value("Full CMS home body"))
+                .andExpect(jsonPath("$.heroMediaUrls").value("/api/media/1/content\nhttps://example.com/hero.jpg"))
                 .andExpect(jsonPath("$.updatedByUserId").exists());
 
         mvc.perform(get("/api/site-settings"))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.footerBodyUa").value("Оновлений підвал"))
-                .andExpect(jsonPath("$.homeIntroEn").value("Home intro"));
+                .andExpect(jsonPath("$.homeIntroEn").value("Home intro"))
+                .andExpect(jsonPath("$.homeBodyUa").value("Повний CMS текст головної"))
+                .andExpect(jsonPath("$.heroMediaUrls").value("/api/media/1/content\nhttps://example.com/hero.jpg"));
     }
 
     @Test

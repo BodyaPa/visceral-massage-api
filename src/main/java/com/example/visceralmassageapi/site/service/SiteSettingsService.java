@@ -45,10 +45,13 @@ public class SiteSettingsService {
         settings.setFooterBodyEn(normalize(request.footerBodyEn()));
         settings.setHomeIntroUa(normalize(request.homeIntroUa()));
         settings.setHomeIntroEn(normalize(request.homeIntroEn()));
+        settings.setHomeBodyUa(normalize(request.homeBodyUa()));
+        settings.setHomeBodyEn(normalize(request.homeBodyEn()));
         settings.setAboutBodyUa(normalize(request.aboutBodyUa()));
         settings.setAboutBodyEn(normalize(request.aboutBodyEn()));
         settings.setContactBodyUa(normalize(request.contactBodyUa()));
         settings.setContactBodyEn(normalize(request.contactBodyEn()));
+        settings.setHeroMediaUrls(normalizeLines(request.heroMediaUrls()));
         settings.setUpdatedBy(actor);
 
         SiteSettings saved = settingsRepository.save(settings);
@@ -75,6 +78,9 @@ public class SiteSettingsService {
                 null,
                 null,
                 null,
+                null,
+                null,
+                null,
                 null
         );
     }
@@ -86,14 +92,30 @@ public class SiteSettingsService {
                 fallback(settings.getFooterBodyEn(), DEFAULT_FOOTER_EN),
                 settings.getHomeIntroUa(),
                 settings.getHomeIntroEn(),
+                settings.getHomeBodyUa(),
+                settings.getHomeBodyEn(),
                 settings.getAboutBodyUa(),
                 settings.getAboutBodyEn(),
                 settings.getContactBodyUa(),
                 settings.getContactBodyEn(),
+                settings.getHeroMediaUrls(),
                 updatedBy == null ? null : updatedBy.getId(),
                 settings.getCreatedAt(),
                 settings.getUpdatedAt()
         );
+    }
+
+    private String normalizeLines(String value) {
+        String normalized = normalize(value);
+        if (normalized == null) {
+            return null;
+        }
+        return normalized.lines()
+                .map(String::trim)
+                .filter(StringUtils::hasText)
+                .distinct()
+                .reduce((left, right) -> left + "\n" + right)
+                .orElse(null);
     }
 
     private String fallback(String value, String fallback) {

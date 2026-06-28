@@ -7,10 +7,13 @@ public record SiteSettingsResponse(
         String footerBodyEn,
         String homeIntroUa,
         String homeIntroEn,
+        String homeBodyUa,
+        String homeBodyEn,
         String aboutBodyUa,
         String aboutBodyEn,
         String contactBodyUa,
         String contactBodyEn,
+        String heroMediaUrls,
         Long updatedByUserId,
         OffsetDateTime createdAt,
         OffsetDateTime updatedAt
