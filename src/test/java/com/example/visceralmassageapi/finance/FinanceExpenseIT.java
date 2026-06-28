@@ -4,6 +4,7 @@ import com.example.visceralmassageapi.IntegrationTestBase;
 import com.example.visceralmassageapi.auth.domain.User;
 import com.example.visceralmassageapi.auth.domain.UserRole;
 import com.example.visceralmassageapi.auth.repo.UserRepository;
+import com.example.visceralmassageapi.common.audit.AuditLogger;
 import com.example.visceralmassageapi.offices.entity.Office;
 import com.example.visceralmassageapi.offices.repository.OfficeRepository;
 import jakarta.servlet.http.Cookie;
@@ -13,11 +14,15 @@ import org.springframework.http.MediaType;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.test.context.DynamicPropertyRegistry;
 import org.springframework.test.context.DynamicPropertySource;
+import org.springframework.test.context.bean.override.mockito.MockitoBean;
+import org.springframework.test.web.servlet.MvcResult;
 import org.springframework.test.web.servlet.MockMvc;
 
 import java.util.concurrent.atomic.AtomicInteger;
 
 import static org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.csrf;
+import static org.mockito.Mockito.reset;
+import static org.mockito.Mockito.verify;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.*;
@@ -32,6 +37,7 @@ class FinanceExpenseIT extends IntegrationTestBase {
     @Autowired UserRepository userRepository;
     @Autowired OfficeRepository officeRepository;
     @Autowired PasswordEncoder passwordEncoder;
+    @MockitoBean AuditLogger auditLogger;
 
     @DynamicPropertySource
     static void ownerBootstrapProperties(DynamicPropertyRegistry registry) {
@@ -44,9 +50,11 @@ class FinanceExpenseIT extends IntegrationTestBase {
     @Test
     void financeManagerCanCreateAndListExpenses() throws Exception {
         Cookie[] financeCookies = loginCookies(OWNER_PHONE);
+        long actorId = userRepository.findByPhone(OWNER_PHONE).orElseThrow().getId();
         long officeId = createOffice();
+        reset(auditLogger);
 
-        mvc.perform(post("/api/admin/finance/expenses")
+        MvcResult createResult = mvc.perform(post("/api/admin/finance/expenses")
                         .with(csrf())
                         .cookie(financeCookies)
                         .contentType(MediaType.APPLICATION_JSON)
@@ -63,7 +71,14 @@ class FinanceExpenseIT extends IntegrationTestBase {
                 .andExpect(jsonPath("$.amount").value(1250.50))
                 .andExpect(jsonPath("$.category").value("Materials"))
                 .andExpect(jsonPath("$.description").value("Test expense"))
-                .andExpect(jsonPath("$.officeId").value(officeId));
+                .andExpect(jsonPath("$.officeId").value(officeId))
+                .andReturn();
+
+        long expenseId = new com.fasterxml.jackson.databind.ObjectMapper()
+                .readTree(createResult.getResponse().getContentAsString())
+                .path("id")
+                .asLong();
+        verify(auditLogger).financeExpenseCreated(expenseId, actorId);
 
         mvc.perform(get("/api/admin/finance/expenses")
                         .cookie(financeCookies)

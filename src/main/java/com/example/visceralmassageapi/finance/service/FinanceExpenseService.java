@@ -1,6 +1,7 @@
 package com.example.visceralmassageapi.finance.service;
 
 import com.example.visceralmassageapi.auth.repo.UserRepository;
+import com.example.visceralmassageapi.common.audit.AuditLogger;
 import com.example.visceralmassageapi.common.exception.BadRequestException;
 import com.example.visceralmassageapi.common.exception.NotFoundException;
 import com.example.visceralmassageapi.finance.domain.FinanceExpense;
@@ -26,6 +27,7 @@ public class FinanceExpenseService {
     private final FinanceExpenseRepository expenseRepository;
     private final OfficeRepository officeRepository;
     private final UserRepository userRepository;
+    private final AuditLogger auditLogger;
 
     @Transactional(readOnly = true)
     public Page<FinanceExpenseResponse> list(Long officeId, LocalDate from, LocalDate to, Pageable pageable) {
@@ -47,7 +49,9 @@ public class FinanceExpenseService {
         expense.setCreatedBy(userRepository.findById(actorId)
                 .orElseThrow(() -> new NotFoundException("User not found")));
 
-        return toResponse(expenseRepository.save(expense));
+        FinanceExpense saved = expenseRepository.save(expense);
+        auditLogger.financeExpenseCreated(saved.getId(), actorId);
+        return toResponse(saved);
     }
 
     private Office resolveOffice(Long officeId) {
