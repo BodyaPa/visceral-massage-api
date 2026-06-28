@@ -59,6 +59,14 @@ public class AuditLogger {
         log.info("audit event=finance_expense_created expenseId={} actorId={}", expenseId, actorId);
     }
 
+    public void membershipPurchaseCreated(long purchaseId, long actorId) {
+        log.info("audit event=membership_purchase_created purchaseId={} actorId={}", purchaseId, actorId);
+    }
+
+    public void membershipPurchasePaymentConfirmed(long purchaseId, long actorId) {
+        log.info("audit event=membership_purchase_payment_confirmed purchaseId={} actorId={}", purchaseId, actorId);
+    }
+
     public void siteSettingsUpdated(long actorId) {
         log.info("audit event=site_settings_updated actorId={}", actorId);
     }
