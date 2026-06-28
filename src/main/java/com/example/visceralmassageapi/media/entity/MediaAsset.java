@@ -36,6 +36,12 @@ public class MediaAsset {
     @Column(name = "office_id")
     private Long officeId;
 
+    @Column(name = "site_settings_id")
+    private Short siteSettingsId;
+
+    @Column(name = "site_slider_sort_order")
+    private Integer siteSliderSortOrder;
+
     @Column(name = "created_at", nullable = false)
     private OffsetDateTime createdAt;
 
@@ -101,6 +107,22 @@ public class MediaAsset {
 
     public void setOfficeId(Long officeId) {
         this.officeId = officeId;
+    }
+
+    public Short getSiteSettingsId() {
+        return siteSettingsId;
+    }
+
+    public void setSiteSettingsId(Short siteSettingsId) {
+        this.siteSettingsId = siteSettingsId;
+    }
+
+    public Integer getSiteSliderSortOrder() {
+        return siteSliderSortOrder;
+    }
+
+    public void setSiteSliderSortOrder(Integer siteSliderSortOrder) {
+        this.siteSliderSortOrder = siteSliderSortOrder;
     }
 
     public OffsetDateTime getCreatedAt() {

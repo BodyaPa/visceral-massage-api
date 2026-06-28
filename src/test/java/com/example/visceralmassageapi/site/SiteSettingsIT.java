@@ -8,6 +8,7 @@ import jakarta.servlet.http.Cookie;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.MediaType;
+import org.springframework.mock.web.MockMultipartFile;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.test.context.DynamicPropertyRegistry;
 import org.springframework.test.context.DynamicPropertySource;
@@ -17,8 +18,10 @@ import java.util.concurrent.atomic.AtomicInteger;
 
 import static org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.csrf;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.multipart;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.put;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.content;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
@@ -27,6 +30,9 @@ class SiteSettingsIT extends IntegrationTestBase {
     private static final String OWNER_PHONE = "+380000000099";
     private static final String OWNER_PASSWORD = "ConfiguredOwnerPassword123!";
     private static final AtomicInteger PHONE_SUFFIX = new AtomicInteger(6000000);
+    private static final byte[] PNG_BYTES = new byte[]{
+            (byte) 0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a, 0x01, 0x02
+    };
 
     @Autowired MockMvc mvc;
     @Autowired UserRepository userRepository;
@@ -38,6 +44,8 @@ class SiteSettingsIT extends IntegrationTestBase {
         registry.add("app.owner.bootstrap.phone", () -> OWNER_PHONE);
         registry.add("app.owner.bootstrap.email", () -> "OWNER@EXAMPLE.COM");
         registry.add("app.owner.bootstrap.password", () -> OWNER_PASSWORD);
+        registry.add("app.media.storage-directory", () -> "./build/test-media/site-settings");
+        registry.add("app.media.max-file-size-bytes", () -> "32");
     }
 
     @Test
@@ -126,6 +134,57 @@ class SiteSettingsIT extends IntegrationTestBase {
                 .andExpect(status().isForbidden());
     }
 
+    @Test
+    void masterCanManageSiteSettingsMediaAndPublicCanReadLinkedContent() throws Exception {
+        Cookie[] masterCookies = loginCookies(OWNER_PHONE);
+
+        var firstUpload = mvc.perform(multipart("/api/admin/site-settings/media")
+                        .file(validPng("first.png"))
+                        .with(csrf())
+                        .cookie(masterCookies))
+                .andExpect(status().isCreated())
+                .andExpect(jsonPath("$.siteSettingsId").value(1))
+                .andExpect(jsonPath("$.siteSliderSortOrder").value(0))
+                .andReturn();
+        String firstId = new com.fasterxml.jackson.databind.ObjectMapper()
+                .readTree(firstUpload.getResponse().getContentAsString())
+                .path("id")
+                .asText();
+
+        var secondUpload = mvc.perform(multipart("/api/admin/site-settings/media")
+                        .file(validPng("second.png"))
+                        .with(csrf())
+                        .cookie(masterCookies))
+                .andExpect(status().isCreated())
+                .andExpect(jsonPath("$.siteSliderSortOrder").value(1))
+                .andReturn();
+        String secondId = new com.fasterxml.jackson.databind.ObjectMapper()
+                .readTree(secondUpload.getResponse().getContentAsString())
+                .path("id")
+                .asText();
+
+        mvc.perform(put("/api/admin/site-settings/media/order")
+                        .with(csrf())
+                        .cookie(masterCookies)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {"mediaIds":["%s","%s"]}
+                                """.formatted(secondId, firstId)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$[0].id").value(secondId))
+                .andExpect(jsonPath("$[1].id").value(firstId));
+
+        mvc.perform(get("/api/site-settings/media"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$[0].id").value(secondId))
+                .andExpect(jsonPath("$[1].id").value(firstId));
+
+        mvc.perform(get("/api/site-settings/media/{id}/content", firstId))
+                .andExpect(status().isOk())
+                .andExpect(content().contentType(MediaType.IMAGE_PNG))
+                .andExpect(content().bytes(PNG_BYTES));
+    }
+
     private String createUser(UserRole... roles) {
         String phone = "+38099" + PHONE_SUFFIX.incrementAndGet();
         User user = new User();
@@ -152,5 +211,9 @@ class SiteSettingsIT extends IntegrationTestBase {
                 .andReturn()
                 .getResponse()
                 .getCookies();
+    }
+
+    private MockMultipartFile validPng(String filename) {
+        return new MockMultipartFile("file", filename, MediaType.IMAGE_PNG_VALUE, PNG_BYTES);
     }
 }

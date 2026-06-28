@@ -25,7 +25,17 @@ public interface MediaService {
 
     MediaAssetResponse unlinkFromNews(UUID id, Integer newsId);
 
+    List<MediaAssetResponse> findAllForSiteSettings();
+
+    MediaAssetResponse linkToSiteSettings(UUID id);
+
+    MediaAssetResponse unlinkFromSiteSettings(UUID id);
+
+    List<MediaAssetResponse> reorderSiteSettingsMedia(List<UUID> mediaIds);
+
     MediaContent loadPublishedContent(Integer newsId, UUID id);
+
+    MediaContent loadSiteSettingsContent(UUID id);
 
     MediaContent loadOfficeContent(Long officeId, UUID id);
 

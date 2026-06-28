@@ -10,6 +10,8 @@ public record MediaAssetResponse(
         long sizeBytes,
         Integer newsId,
         Long officeId,
+        Short siteSettingsId,
+        Integer siteSliderSortOrder,
         OffsetDateTime createdAt
 ) {
 }

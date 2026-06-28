@@ -11,6 +11,7 @@ import com.example.visceralmassageapi.media.storage.MediaFileStorage;
 import com.example.visceralmassageapi.news.exception.NewsNotFoundException;
 import com.example.visceralmassageapi.news.repository.NewsRepository;
 import com.example.visceralmassageapi.offices.repository.OfficeRepository;
+import com.example.visceralmassageapi.site.domain.SiteSettings;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.http.MediaType;
@@ -130,8 +131,72 @@ public class MediaServiceImpl implements MediaService {
     }
 
     @Override
+    public List<MediaAssetResponse> findAllForSiteSettings() {
+        return repository.findAllBySiteSettingsIdOrderBySiteSliderSortOrderAscCreatedAtAsc(SiteSettings.SINGLETON_ID)
+                .stream()
+                .map(this::toResponse)
+                .toList();
+    }
+
+    @Override
+    @Transactional
+    public MediaAssetResponse linkToSiteSettings(UUID id) {
+        MediaAsset asset = requireAsset(id);
+        if (asset.getNewsId() != null || asset.getOfficeId() != null) {
+            throw new BadRequestException("Media asset is already linked to another content area");
+        }
+        if (asset.getSiteSettingsId() != null && !asset.getSiteSettingsId().equals(SiteSettings.SINGLETON_ID)) {
+            throw new BadRequestException("Media asset is already linked to another site settings area");
+        }
+        if (asset.getSiteSettingsId() == null) {
+            asset.setSiteSettingsId(SiteSettings.SINGLETON_ID);
+            asset.setSiteSliderSortOrder(repository.maxSiteSliderSortOrder(SiteSettings.SINGLETON_ID) + 1);
+        }
+        return toResponse(repository.save(asset));
+    }
+
+    @Override
+    @Transactional
+    public MediaAssetResponse unlinkFromSiteSettings(UUID id) {
+        MediaAsset asset = repository.findByIdAndSiteSettingsId(id, SiteSettings.SINGLETON_ID)
+                .orElseThrow(() -> new MediaAssetNotFoundException(id));
+        asset.setSiteSettingsId(null);
+        asset.setSiteSliderSortOrder(null);
+        return toResponse(repository.save(asset));
+    }
+
+    @Override
+    @Transactional
+    public List<MediaAssetResponse> reorderSiteSettingsMedia(List<UUID> mediaIds) {
+        List<MediaAsset> current = repository.findAllBySiteSettingsIdOrderBySiteSliderSortOrderAscCreatedAtAsc(SiteSettings.SINGLETON_ID);
+        if (current.size() != mediaIds.size()) {
+            throw new BadRequestException("Media order must include every linked site settings asset");
+        }
+
+        Map<UUID, MediaAsset> byId = current.stream().collect(java.util.stream.Collectors.toMap(MediaAsset::getId, asset -> asset));
+        for (int index = 0; index < mediaIds.size(); index++) {
+            MediaAsset asset = byId.get(mediaIds.get(index));
+            if (asset == null) {
+                throw new BadRequestException("Media order contains unknown site settings asset");
+            }
+            asset.setSiteSliderSortOrder(index);
+        }
+        return repository.saveAll(current).stream()
+                .sorted(java.util.Comparator.comparing(MediaAsset::getSiteSliderSortOrder))
+                .map(this::toResponse)
+                .toList();
+    }
+
+    @Override
     public MediaContent loadPublishedContent(Integer newsId, UUID id) {
         MediaAsset asset = repository.findByIdAndNewsId(id, newsId)
+                .orElseThrow(() -> new MediaAssetNotFoundException(id));
+        return new MediaContent(toResponse(asset), fileStorage.load(asset.getStorageKey()));
+    }
+
+    @Override
+    public MediaContent loadSiteSettingsContent(UUID id) {
+        MediaAsset asset = repository.findByIdAndSiteSettingsId(id, SiteSettings.SINGLETON_ID)
                 .orElseThrow(() -> new MediaAssetNotFoundException(id));
         return new MediaContent(toResponse(asset), fileStorage.load(asset.getStorageKey()));
     }
@@ -156,6 +221,9 @@ public class MediaServiceImpl implements MediaService {
         }
         if (asset.getOfficeId() != null) {
             throw new BadRequestException("Office media asset must be detached before deletion");
+        }
+        if (asset.getSiteSettingsId() != null) {
+            throw new BadRequestException("Site settings media asset must be detached before deletion");
         }
         fileStorage.delete(asset.getStorageKey());
         repository.delete(asset);
@@ -264,6 +332,8 @@ public class MediaServiceImpl implements MediaService {
                 asset.getSizeBytes(),
                 asset.getNewsId(),
                 asset.getOfficeId(),
+                asset.getSiteSettingsId(),
+                asset.getSiteSliderSortOrder(),
                 asset.getCreatedAt()
         );
     }
