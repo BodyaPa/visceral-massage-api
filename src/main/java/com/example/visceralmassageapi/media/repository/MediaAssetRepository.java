@@ -13,12 +13,12 @@ public interface MediaAssetRepository extends JpaRepository<MediaAsset, UUID> {
 
     List<MediaAsset> findAllByOfficeIdOrderByCreatedAtAsc(Long officeId);
 
-    List<MediaAsset> findAllBySiteSettingsIdOrderBySiteSliderSortOrderAscCreatedAtAsc(Short siteSettingsId);
+    List<MediaAsset> findAllBySiteSettingsIdAndSiteSliderSortOrderIsNotNullOrderBySiteSliderSortOrderAscCreatedAtAsc(Short siteSettingsId);
 
     Optional<MediaAsset> findByIdAndNewsId(UUID id, Integer newsId);
 
     Optional<MediaAsset> findByIdAndSiteSettingsId(UUID id, Short siteSettingsId);
 
-    @Query("select coalesce(max(m.siteSliderSortOrder), -1) from MediaAsset m where m.siteSettingsId = ?1")
+    @Query("select coalesce(max(m.siteSliderSortOrder), -1) from MediaAsset m where m.siteSettingsId = ?1 and m.siteSliderSortOrder is not null")
     int maxSiteSliderSortOrder(Short siteSettingsId);
 }

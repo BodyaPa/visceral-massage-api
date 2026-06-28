@@ -183,6 +183,30 @@ class SiteSettingsIT extends IntegrationTestBase {
                 .andExpect(status().isOk())
                 .andExpect(content().contentType(MediaType.IMAGE_PNG))
                 .andExpect(content().bytes(PNG_BYTES));
+
+        var contentUpload = mvc.perform(multipart("/api/admin/site-settings/content-media")
+                        .file(validPng("inline.png"))
+                        .with(csrf())
+                        .cookie(masterCookies))
+                .andExpect(status().isCreated())
+                .andExpect(jsonPath("$.siteSettingsId").value(1))
+                .andExpect(jsonPath("$.siteSliderSortOrder").isEmpty())
+                .andReturn();
+        String contentId = new com.fasterxml.jackson.databind.ObjectMapper()
+                .readTree(contentUpload.getResponse().getContentAsString())
+                .path("id")
+                .asText();
+
+        mvc.perform(get("/api/site-settings/media"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$[0].id").value(secondId))
+                .andExpect(jsonPath("$[1].id").value(firstId))
+                .andExpect(jsonPath("$[2]").doesNotExist());
+
+        mvc.perform(get("/api/site-settings/media/{id}/content", contentId))
+                .andExpect(status().isOk())
+                .andExpect(content().contentType(MediaType.IMAGE_PNG))
+                .andExpect(content().bytes(PNG_BYTES));
     }
 
     private String createUser(UserRole... roles) {

@@ -96,6 +96,16 @@ public class MediaServiceImpl implements MediaService {
     }
 
     @Override
+    @Transactional
+    public MediaAssetResponse uploadSiteSettingsContentMedia(MultipartFile file, long uploadedBy) {
+        MediaAssetResponse uploaded = upload(file, uploadedBy);
+        MediaAsset asset = requireAsset(uploaded.id());
+        asset.setSiteSettingsId(SiteSettings.SINGLETON_ID);
+        asset.setSiteSliderSortOrder(null);
+        return toResponse(repository.save(asset));
+    }
+
+    @Override
     public MediaContent loadContent(UUID id) {
         MediaAsset asset = requireAsset(id);
         return new MediaContent(toResponse(asset), fileStorage.load(asset.getStorageKey()));
@@ -132,7 +142,7 @@ public class MediaServiceImpl implements MediaService {
 
     @Override
     public List<MediaAssetResponse> findAllForSiteSettings() {
-        return repository.findAllBySiteSettingsIdOrderBySiteSliderSortOrderAscCreatedAtAsc(SiteSettings.SINGLETON_ID)
+        return repository.findAllBySiteSettingsIdAndSiteSliderSortOrderIsNotNullOrderBySiteSliderSortOrderAscCreatedAtAsc(SiteSettings.SINGLETON_ID)
                 .stream()
                 .map(this::toResponse)
                 .toList();
@@ -168,7 +178,7 @@ public class MediaServiceImpl implements MediaService {
     @Override
     @Transactional
     public List<MediaAssetResponse> reorderSiteSettingsMedia(List<UUID> mediaIds) {
-        List<MediaAsset> current = repository.findAllBySiteSettingsIdOrderBySiteSliderSortOrderAscCreatedAtAsc(SiteSettings.SINGLETON_ID);
+        List<MediaAsset> current = repository.findAllBySiteSettingsIdAndSiteSliderSortOrderIsNotNullOrderBySiteSliderSortOrderAscCreatedAtAsc(SiteSettings.SINGLETON_ID);
         if (current.size() != mediaIds.size()) {
             throw new BadRequestException("Media order must include every linked site settings asset");
         }

@@ -57,6 +57,16 @@ public class AdminSiteSettingsController {
         return ResponseEntity.created(URI.create("/api/admin/site-settings/media/" + linked.id())).body(linked);
     }
 
+    @PostMapping(path = "/content-media", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
+    public ResponseEntity<MediaAssetResponse> uploadContentMedia(
+            @RequestPart("file") MultipartFile file,
+            Authentication authentication
+    ) {
+        long userId = currentUserId(authentication);
+        MediaAssetResponse uploaded = mediaService.uploadSiteSettingsContentMedia(file, userId);
+        return ResponseEntity.created(URI.create("/api/admin/site-settings/media/" + uploaded.id())).body(uploaded);
+    }
+
     @GetMapping("/media/{mediaId}/content")
     public ResponseEntity<Resource> mediaContent(@PathVariable UUID mediaId) {
         MediaService.MediaContent media = mediaService.loadSiteSettingsContent(mediaId);

@@ -17,6 +17,8 @@ public interface MediaService {
 
     MediaAssetResponse upload(MultipartFile file, long uploadedBy);
 
+    MediaAssetResponse uploadSiteSettingsContentMedia(MultipartFile file, long uploadedBy);
+
     MediaContent loadContent(UUID id);
 
     List<MediaAssetResponse> findAllForNews(Integer newsId);
