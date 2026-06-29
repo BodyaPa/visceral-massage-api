@@ -1,4 +1,4 @@
 package com.example.visceralmassageapi.schedule.dto;
 
-public record FixedEventEnrollmentRequest(boolean reminderOptIn) {
+public record FixedEventEnrollmentRequest(boolean reminderOptIn, Long membershipPurchaseId) {
 }

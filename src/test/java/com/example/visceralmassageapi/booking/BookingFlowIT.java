@@ -7,6 +7,10 @@ import com.example.visceralmassageapi.auth.repo.UserRepository;
 import com.example.visceralmassageapi.booking.domain.Booking;
 import com.example.visceralmassageapi.booking.domain.BookingStatus;
 import com.example.visceralmassageapi.booking.repository.BookingRepository;
+import com.example.visceralmassageapi.memberships.domain.MembershipPurchase;
+import com.example.visceralmassageapi.memberships.domain.MembershipPurchaseStatus;
+import com.example.visceralmassageapi.memberships.repository.MembershipOfferRepository;
+import com.example.visceralmassageapi.memberships.repository.MembershipPurchaseRepository;
 import com.example.visceralmassageapi.offices.entity.Office;
 import com.example.visceralmassageapi.offices.repository.OfficeRepository;
 import com.example.visceralmassageapi.schedule.domain.FixedEvent;
@@ -54,6 +58,8 @@ class BookingFlowIT extends IntegrationTestBase {
     @Autowired OfficeRepository officeRepository;
     @Autowired ServiceOfferingRepository serviceOfferingRepository;
     @Autowired BookingRepository bookingRepository;
+    @Autowired MembershipOfferRepository membershipOfferRepository;
+    @Autowired MembershipPurchaseRepository membershipPurchaseRepository;
     @Autowired FixedEventRepository fixedEventRepository;
     @Autowired SpecialistAvailabilityBlockRepository availabilityBlockRepository;
     @Autowired PasswordEncoder passwordEncoder;
@@ -121,6 +127,56 @@ class BookingFlowIT extends IntegrationTestBase {
                                 }
                                 """.formatted(blockId, serviceId)))
                 .andExpect(status().isBadRequest());
+    }
+
+    @Test
+    void activeMembershipVisitCanPayForBookingAndIsRefundedOnCancel() throws Exception {
+        Cookie[] specialistCookies = loginCookies(OWNER_PHONE);
+        String userPhone = createUser();
+        Cookie[] userCookies = loginCookies(userPhone);
+        User user = userRepository.findByPhone(userPhone).orElseThrow();
+        long officeId = createOffice();
+        long serviceId = createService(true);
+        long blockId = createAvailabilityWithRange(
+                specialistCookies,
+                officeId,
+                "2031-03-05T08:00:00Z",
+                "2031-03-05T10:00:00Z"
+        );
+        long purchaseId = createActiveMembershipPurchase(user, serviceId);
+
+        var bookingResult = mvc.perform(post("/api/bookings")
+                        .with(csrf())
+                        .cookie(userCookies)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {
+                                  "availabilityBlockId":%s,
+                                  "serviceId":%s,
+                                  "startsAt":"2031-03-05T08:00:00Z",
+                                  "reminderOptIn":false,
+                                  "membershipPurchaseId":%s
+                                }
+                                """.formatted(blockId, serviceId, purchaseId)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.status").value("CONFIRMED"))
+                .andExpect(jsonPath("$.externalPaymentUrl").doesNotExist())
+                .andExpect(jsonPath("$.membershipPurchaseId").value(purchaseId))
+                .andExpect(jsonPath("$.paidWithMembership").value(true))
+                .andReturn();
+
+        long bookingId = objectMapper.readTree(bookingResult.getResponse().getContentAsString()).path("id").asLong();
+        membershipPurchaseRepository.findById(purchaseId)
+                .ifPresent(purchase -> org.assertj.core.api.Assertions.assertThat(purchase.getVisitsRemaining()).isEqualTo(3));
+
+        mvc.perform(post("/api/bookings/%s/cancel".formatted(bookingId))
+                        .with(csrf())
+                        .cookie(userCookies))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.status").value("CANCELLED"));
+
+        membershipPurchaseRepository.findById(purchaseId)
+                .ifPresent(purchase -> org.assertj.core.api.Assertions.assertThat(purchase.getVisitsRemaining()).isEqualTo(4));
     }
 
     @Test
@@ -1383,6 +1439,26 @@ class BookingFlowIT extends IntegrationTestBase {
         user.setEnabled(true);
         userRepository.save(user);
         return phone;
+    }
+
+    private long createActiveMembershipPurchase(User user, long serviceId) {
+        var offer = membershipOfferRepository.findByActiveTrueOrderBySortOrderAscIdAsc().stream()
+                .filter(item -> item.getVisitsTotal() != null && item.getVisitsTotal() > 0)
+                .findFirst()
+                .orElseThrow();
+        offer.getEligibleServiceIds().add(serviceId);
+        membershipOfferRepository.save(offer);
+
+        MembershipPurchase purchase = new MembershipPurchase();
+        purchase.setUser(user);
+        purchase.setOffer(offer);
+        purchase.setStatus(MembershipPurchaseStatus.ACTIVE);
+        purchase.setPriceSnapshot(offer.getPrice());
+        purchase.setVisitsTotal(offer.getVisitsTotal());
+        purchase.setVisitsRemaining(offer.getVisitsTotal());
+        purchase.setActivatedAt(OffsetDateTime.now().minusDays(1));
+        purchase.setExpiresAt(OffsetDateTime.now().plusDays(30));
+        return membershipPurchaseRepository.save(purchase).getId();
     }
 
     private Cookie[] loginCookies(String phone) throws Exception {

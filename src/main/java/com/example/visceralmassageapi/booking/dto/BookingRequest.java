@@ -8,6 +8,7 @@ public record BookingRequest(
         @NotNull Long availabilityBlockId,
         @NotNull Long serviceId,
         OffsetDateTime startsAt,
-        boolean reminderOptIn
+        boolean reminderOptIn,
+        Long membershipPurchaseId
 ) {
 }

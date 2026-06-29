@@ -18,6 +18,8 @@ import com.example.visceralmassageapi.common.exception.BadRequestException;
 import com.example.visceralmassageapi.common.exception.NotFoundException;
 import com.example.visceralmassageapi.finance.repository.SpecialistFinanceSettingsRepository;
 import com.example.visceralmassageapi.finance.service.FinanceShareCalculator;
+import com.example.visceralmassageapi.memberships.domain.MembershipPurchase;
+import com.example.visceralmassageapi.memberships.service.MembershipService;
 import com.example.visceralmassageapi.offices.entity.Office;
 import com.example.visceralmassageapi.schedule.domain.ScheduleBlockType;
 import com.example.visceralmassageapi.schedule.domain.ScheduleBlockStatus;
@@ -55,6 +57,7 @@ public class BookingService {
     private final FixedEventRepository fixedEventRepository;
     private final SpecialistFinanceSettingsRepository specialistFinanceSettingsRepository;
     private final ScheduleProps scheduleProps;
+    private final MembershipService membershipService;
 
     @Transactional
     public BookingResponse create(long userId, BookingRequest request) {
@@ -66,7 +69,8 @@ public class BookingService {
                 request.serviceId(),
                 request.startsAt(),
                 request.reminderOptIn(),
-                null
+                null,
+                request.membershipPurchaseId()
         ));
     }
 
@@ -80,7 +84,8 @@ public class BookingService {
                 request.serviceId(),
                 request.startsAt(),
                 request.reminderOptIn(),
-                allowedSpecialistId
+                allowedSpecialistId,
+                null
         );
         return toSpecialistResponse(booking);
     }
@@ -91,7 +96,8 @@ public class BookingService {
             long serviceId,
             OffsetDateTime requestedStartsAt,
             boolean reminderOptIn,
-            Long requiredSpecialistId
+            Long requiredSpecialistId,
+            Long membershipPurchaseId
     ) {
         SpecialistAvailabilityBlock block = availabilityBlockRepository.findForBooking(availabilityBlockId)
                 .orElseThrow(() -> new NotFoundException("Availability block not found"));
@@ -185,17 +191,20 @@ public class BookingService {
             throw new BadRequestException("Selected booking slot is blocked");
         }
 
+        MembershipPurchase membershipPurchase = membershipService.consumeVisit(client.getId(), membershipPurchaseId, service);
+
         Booking booking = new Booking();
         booking.setUser(client);
         booking.setSpecialist(block.getSpecialist());
         booking.setService(service);
         booking.setOffice(block.getOffice());
         booking.setAvailabilityBlock(block);
-        booking.setStatus(BookingStatus.AWAITING_PAYMENT_CONFIRMATION);
+        booking.setStatus(membershipPurchase == null ? BookingStatus.AWAITING_PAYMENT_CONFIRMATION : BookingStatus.CONFIRMED);
         booking.setStartsAt(bookingStartsAt);
         booking.setEndsAt(bookingEndsAt);
-        booking.setBookedPrice(service.getBasePrice());
+        booking.setBookedPrice(membershipPurchase == null ? service.getBasePrice() : BigDecimal.ZERO);
         booking.setReminderOptIn(reminderOptIn);
+        booking.setMembershipPurchase(membershipPurchase);
 
         Booking savedBooking = bookingRepository.save(booking);
         auditLogger.bookingCreated(savedBooking.getId(), requiredSpecialistId == null ? client.getId() : requiredSpecialistId);
@@ -226,6 +235,7 @@ public class BookingService {
         }
 
         booking.setStatus(BookingStatus.CANCELLED);
+        membershipService.refundVisit(booking.getMembershipPurchase());
         auditLogger.bookingCancelled(booking.getId(), userId);
         return toResponse(booking);
     }
@@ -333,7 +343,9 @@ public class BookingService {
                 booking.getStartsAt(),
                 booking.getEndsAt(),
                 booking.isReminderOptIn(),
-                service.getExternalPaymentUrl()
+                booking.getMembershipPurchase() == null ? service.getExternalPaymentUrl() : null,
+                booking.getMembershipPurchase() == null ? null : booking.getMembershipPurchase().getId(),
+                booking.getMembershipPurchase() != null
         );
     }
 
@@ -368,7 +380,9 @@ public class BookingService {
                 service.getId(),
                 service.getTitleUa(),
                 service.getTitleEn(),
-                service.getExternalPaymentUrl(),
+                booking.getMembershipPurchase() == null ? service.getExternalPaymentUrl() : null,
+                booking.getMembershipPurchase() == null ? null : booking.getMembershipPurchase().getId(),
+                booking.getMembershipPurchase() != null,
                 booking.getBookedPrice(),
                 specialistSharePercent,
                 specialistShare,

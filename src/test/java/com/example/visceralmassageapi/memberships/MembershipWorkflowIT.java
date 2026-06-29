@@ -5,6 +5,9 @@ import com.example.visceralmassageapi.auth.domain.User;
 import com.example.visceralmassageapi.auth.domain.UserRole;
 import com.example.visceralmassageapi.auth.repo.UserRepository;
 import com.example.visceralmassageapi.common.audit.AuditLogger;
+import com.example.visceralmassageapi.services.entity.ServiceBookingMode;
+import com.example.visceralmassageapi.services.entity.ServiceOffering;
+import com.example.visceralmassageapi.services.repository.ServiceOfferingRepository;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import jakarta.servlet.http.Cookie;
 import org.junit.jupiter.api.Test;
@@ -23,6 +26,7 @@ import static org.mockito.Mockito.verify;
 import static org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.csrf;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.put;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.*;
 
 class MembershipWorkflowIT extends IntegrationTestBase {
@@ -34,6 +38,7 @@ class MembershipWorkflowIT extends IntegrationTestBase {
     @Autowired MockMvc mvc;
     @Autowired ObjectMapper objectMapper;
     @Autowired UserRepository userRepository;
+    @Autowired ServiceOfferingRepository serviceOfferingRepository;
     @Autowired PasswordEncoder passwordEncoder;
     @MockitoBean AuditLogger auditLogger;
 
@@ -74,6 +79,14 @@ class MembershipWorkflowIT extends IntegrationTestBase {
                 .andReturn();
         long purchaseId = objectMapper.readTree(purchaseResult.getResponse().getContentAsString()).path("id").asLong();
         verify(auditLogger).membershipPurchaseCreated(purchaseId, userId);
+
+        mvc.perform(post("/api/memberships/purchases/%s/payment-session".formatted(purchaseId))
+                        .with(csrf())
+                        .cookie(userCookies))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.purchaseId").value(purchaseId))
+                .andExpect(jsonPath("$.mode").value("MANUAL_REVIEW"))
+                .andExpect(jsonPath("$.requiresManualConfirmation").value(true));
 
         mvc.perform(get("/api/memberships/purchases/my")
                         .cookie(userCookies)
@@ -119,6 +132,43 @@ class MembershipWorkflowIT extends IntegrationTestBase {
                 .andExpect(status().isForbidden());
     }
 
+    @Test
+    void masterUpdatesMembershipOfferEligibility() throws Exception {
+        Cookie[] masterCookies = loginCookies(OWNER_PHONE);
+        Cookie[] userCookies = loginCookies(createUser());
+        ServiceOffering service = createService();
+
+        var offersResult = mvc.perform(get("/api/admin/memberships/offers").cookie(masterCookies))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$[0].code").value("care-4"))
+                .andReturn();
+        long offerId = objectMapper.readTree(offersResult.getResponse().getContentAsString()).path(0).path("id").asLong();
+
+        mvc.perform(put("/api/admin/memberships/offers/%s".formatted(offerId))
+                        .with(csrf())
+                        .cookie(masterCookies)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {
+                                  "titleUa":"Абонемент 4 візити",
+                                  "titleEn":"Care pack 4",
+                                  "descriptionUa":"Оновлений опис",
+                                  "descriptionEn":"Updated description",
+                                  "price":4200,
+                                  "visitsTotal":4,
+                                  "validityDays":60,
+                                  "active":true,
+                                  "eligibleServiceIds":[%s]
+                                }
+                                """.formatted(service.getId())))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.eligibleServiceIds[0]").value(service.getId()))
+                .andExpect(jsonPath("$.validityDays").value(60));
+
+        mvc.perform(get("/api/admin/memberships/offers").cookie(userCookies))
+                .andExpect(status().isForbidden());
+    }
+
     private String createUser() {
         String phone = "+38095" + SUFFIX.incrementAndGet();
         User user = new User();
@@ -130,6 +180,17 @@ class MembershipWorkflowIT extends IntegrationTestBase {
         user.setEnabled(true);
         userRepository.save(user);
         return phone;
+    }
+
+    private ServiceOffering createService() {
+        ServiceOffering service = new ServiceOffering();
+        service.setTitleUa("Тестова послуга");
+        service.setTitleEn("Test service");
+        service.setDurationMinutes(60);
+        service.setBasePrice(java.math.BigDecimal.valueOf(1200));
+        service.setBookingMode(ServiceBookingMode.INDIVIDUAL_APPOINTMENT);
+        service.setActive(true);
+        return serviceOfferingRepository.save(service);
     }
 
     private Cookie[] loginCookies(String identifier) throws Exception {

@@ -67,6 +67,10 @@ public class AuditLogger {
         log.info("audit event=membership_purchase_payment_confirmed purchaseId={} actorId={}", purchaseId, actorId);
     }
 
+    public void fixedEventEnrollmentPaymentConfirmed(long enrollmentId, long actorId) {
+        log.info("audit event=fixed_event_enrollment_payment_confirmed enrollmentId={} actorId={}", enrollmentId, actorId);
+    }
+
     public void siteSettingsUpdated(long actorId) {
         log.info("audit event=site_settings_updated actorId={}", actorId);
     }

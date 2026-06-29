@@ -1,6 +1,7 @@
 package com.example.visceralmassageapi.booking.domain;
 
 import com.example.visceralmassageapi.auth.domain.User;
+import com.example.visceralmassageapi.memberships.domain.MembershipPurchase;
 import com.example.visceralmassageapi.offices.entity.Office;
 import com.example.visceralmassageapi.schedule.domain.SpecialistAvailabilityBlock;
 import com.example.visceralmassageapi.services.entity.ServiceOffering;
@@ -53,6 +54,10 @@ public class Booking {
 
     @Column(name = "booked_price", nullable = false, precision = 12, scale = 2)
     private BigDecimal bookedPrice;
+
+    @ManyToOne
+    @JoinColumn(name = "membership_purchase_id")
+    private MembershipPurchase membershipPurchase;
 
     @Enumerated(EnumType.STRING)
     @Column(name = "specialist_payout_status", nullable = false, length = 24)

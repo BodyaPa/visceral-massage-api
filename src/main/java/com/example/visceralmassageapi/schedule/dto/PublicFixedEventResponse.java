@@ -32,6 +32,8 @@ public record PublicFixedEventResponse(
         boolean enrolled,
         FixedEventEnrollmentStatus enrollmentStatus,
         BigDecimal price,
-        String note
+        String note,
+        Long membershipPurchaseId,
+        boolean paidWithMembership
 ) {
 }

@@ -1,6 +1,7 @@
 package com.example.visceralmassageapi.schedule.domain;
 
 import com.example.visceralmassageapi.auth.domain.User;
+import com.example.visceralmassageapi.memberships.domain.MembershipPurchase;
 import jakarta.persistence.*;
 import lombok.Getter;
 import lombok.Setter;
@@ -34,6 +35,17 @@ public class FixedEventEnrollment {
 
     @Column(name = "reminder_sent_at")
     private OffsetDateTime reminderSentAt;
+
+    @ManyToOne
+    @JoinColumn(name = "membership_purchase_id")
+    private MembershipPurchase membershipPurchase;
+
+    @Column(name = "payment_confirmed_at")
+    private OffsetDateTime paymentConfirmedAt;
+
+    @ManyToOne
+    @JoinColumn(name = "payment_confirmed_by_user_id")
+    private User paymentConfirmedBy;
 
     @Column(name = "created_at", nullable = false)
     private OffsetDateTime createdAt;

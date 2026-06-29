@@ -3,6 +3,7 @@ package com.example.visceralmassageapi.memberships.dto;
 import com.example.visceralmassageapi.memberships.domain.MembershipOfferKind;
 
 import java.math.BigDecimal;
+import java.util.Set;
 
 public record MembershipOfferResponse(
         Long id,
@@ -15,6 +16,7 @@ public record MembershipOfferResponse(
         BigDecimal price,
         Integer visitsTotal,
         int validityDays,
-        boolean active
+        boolean active,
+        Set<Long> eligibleServiceIds
 ) {
 }

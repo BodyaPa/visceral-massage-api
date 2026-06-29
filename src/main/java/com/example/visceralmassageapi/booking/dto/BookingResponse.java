@@ -25,6 +25,8 @@ public record BookingResponse(
         OffsetDateTime startsAt,
         OffsetDateTime endsAt,
         boolean reminderOptIn,
-        String externalPaymentUrl
+        String externalPaymentUrl,
+        Long membershipPurchaseId,
+        boolean paidWithMembership
 ) {
 }

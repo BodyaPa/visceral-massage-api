@@ -6,6 +6,8 @@ import lombok.Setter;
 
 import java.math.BigDecimal;
 import java.time.OffsetDateTime;
+import java.util.HashSet;
+import java.util.Set;
 
 @Getter
 @Setter
@@ -47,6 +49,11 @@ public class MembershipOffer {
 
     @Column(nullable = false)
     private boolean active = true;
+
+    @ElementCollection(fetch = FetchType.EAGER)
+    @CollectionTable(name = "membership_offer_services", joinColumns = @JoinColumn(name = "offer_id"))
+    @Column(name = "service_id", nullable = false)
+    private Set<Long> eligibleServiceIds = new HashSet<>();
 
     @Column(name = "sort_order", nullable = false)
     private int sortOrder = 100;

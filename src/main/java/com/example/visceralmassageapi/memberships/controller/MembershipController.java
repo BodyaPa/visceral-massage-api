@@ -1,6 +1,7 @@
 package com.example.visceralmassageapi.memberships.controller;
 
 import com.example.visceralmassageapi.memberships.dto.MembershipOfferResponse;
+import com.example.visceralmassageapi.memberships.dto.MembershipPaymentSessionResponse;
 import com.example.visceralmassageapi.memberships.dto.MembershipPurchaseRequest;
 import com.example.visceralmassageapi.memberships.dto.MembershipPurchaseResponse;
 import com.example.visceralmassageapi.memberships.service.MembershipService;
@@ -37,6 +38,14 @@ public class MembershipController {
             @Valid @RequestBody MembershipPurchaseRequest request
     ) {
         return ResponseEntity.ok(membershipService.createPurchase(currentUserId(authentication), request));
+    }
+
+    @PostMapping("/purchases/{id}/payment-session")
+    public ResponseEntity<MembershipPaymentSessionResponse> createPaymentSession(
+            Authentication authentication,
+            @PathVariable long id
+    ) {
+        return ResponseEntity.ok(membershipService.createPaymentSession(currentUserId(authentication), id));
     }
 
     private long currentUserId(Authentication authentication) {

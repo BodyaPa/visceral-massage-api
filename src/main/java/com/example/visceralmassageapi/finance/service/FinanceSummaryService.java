@@ -8,6 +8,7 @@ import com.example.visceralmassageapi.finance.domain.FinanceExpense;
 import com.example.visceralmassageapi.finance.dto.FinanceSummaryResponse;
 import com.example.visceralmassageapi.finance.repository.FinanceExpenseSpecifications;
 import com.example.visceralmassageapi.finance.repository.SpecialistFinanceSettingsRepository;
+import com.example.visceralmassageapi.schedule.repository.FixedEventEnrollmentRepository;
 import jakarta.persistence.EntityManager;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
@@ -27,10 +28,14 @@ import static com.example.visceralmassageapi.booking.repository.BookingSpecifica
 @RequiredArgsConstructor
 public class FinanceSummaryService {
 
+    private static final OffsetDateTime MIN_FINANCE_RANGE = OffsetDateTime.parse("1900-01-01T00:00:00Z");
+    private static final OffsetDateTime MAX_FINANCE_RANGE = OffsetDateTime.parse("3000-01-01T00:00:00Z");
+
     private final BookingRepository bookingRepository;
     private final EntityManager entityManager;
     private final SpecialistFinanceSettingsRepository specialistFinanceSettingsRepository;
     private final FinanceSettingsService financeSettingsService;
+    private final FixedEventEnrollmentRepository fixedEventEnrollmentRepository;
 
     @Transactional(readOnly = true)
     public FinanceSummaryResponse summarize(
@@ -41,15 +46,19 @@ public class FinanceSummaryService {
             LocalDate expenseTo
     ) {
         validateRanges(from, to, expenseFrom, expenseTo);
+        OffsetDateTime eventFrom = from == null ? MIN_FINANCE_RANGE : from;
+        OffsetDateTime eventTo = to == null ? MAX_FINANCE_RANGE : to;
 
         long pendingCount = bookingRepository.count(financeFilter(
                 BookingStatus.AWAITING_PAYMENT_CONFIRMATION, officeId, from, to
-        ));
-        long confirmedCount = bookingRepository.count(financeFilter(BookingStatus.CONFIRMED, officeId, from, to));
+        )) + fixedEventEnrollmentRepository.countPendingPaymentForFinance(officeId, eventFrom, eventTo);
+        long confirmedCount = bookingRepository.count(financeFilter(BookingStatus.CONFIRMED, officeId, from, to))
+                + fixedEventEnrollmentRepository.countConfirmedPaymentForFinance(officeId, eventFrom, eventTo);
         List<Booking> confirmedBookings = bookingRepository.findAll(financeFilter(BookingStatus.CONFIRMED, officeId, from, to));
         BigDecimal income = confirmedBookings.stream()
                 .map(Booking::getBookedPrice)
-                .reduce(BigDecimal.ZERO, BigDecimal::add);
+                .reduce(BigDecimal.ZERO, BigDecimal::add)
+                .add(fixedEventEnrollmentRepository.sumConfirmedPaymentAmountForFinance(officeId, eventFrom, eventTo));
         BigDecimal specialistEarnings = sumSpecialistEarnings(confirmedBookings);
         BigDecimal businessIncome = income.subtract(specialistEarnings);
         BigDecimal expenses = sumExpenses(officeId, expenseFrom, expenseTo);

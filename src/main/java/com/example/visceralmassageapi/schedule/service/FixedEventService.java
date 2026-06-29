@@ -8,6 +8,8 @@ import com.example.visceralmassageapi.booking.repository.BookingRepository;
 import com.example.visceralmassageapi.common.config.ScheduleProps;
 import com.example.visceralmassageapi.common.exception.BadRequestException;
 import com.example.visceralmassageapi.common.exception.NotFoundException;
+import com.example.visceralmassageapi.memberships.domain.MembershipPurchase;
+import com.example.visceralmassageapi.memberships.service.MembershipService;
 import com.example.visceralmassageapi.offices.entity.Office;
 import com.example.visceralmassageapi.offices.repository.OfficeRepository;
 import com.example.visceralmassageapi.schedule.domain.FixedEvent;
@@ -52,6 +54,7 @@ public class FixedEventService {
     private final BookingRepository bookingRepository;
     private final SpecialistAvailabilityBlockRepository availabilityBlockRepository;
     private final ScheduleProps scheduleProps;
+    private final MembershipService membershipService;
 
     @Transactional(readOnly = true)
     public List<PublicFixedEventResponse> listPublic(
@@ -74,6 +77,7 @@ public class FixedEventService {
         Map<Long, Integer> enrollmentCounts = new HashMap<>();
         Set<Long> enrolledEventIds = new HashSet<>();
         Map<Long, FixedEventEnrollmentStatus> currentUserEnrollmentStatuses = new HashMap<>();
+        Map<Long, MembershipPurchase> currentUserMembershipPurchases = new HashMap<>();
 
         if (!eventIds.isEmpty()) {
             for (FixedEventEnrollment enrollment : fixedEventEnrollmentRepository.findActiveForEvents(eventIds)) {
@@ -82,6 +86,7 @@ public class FixedEventService {
                 if (currentUserId != null && enrollment.getUser().getId().equals(currentUserId)) {
                     enrolledEventIds.add(eventId);
                     currentUserEnrollmentStatuses.put(eventId, enrollment.getStatus());
+                    currentUserMembershipPurchases.put(eventId, enrollment.getMembershipPurchase());
                 }
             }
             if (currentUserId != null) {
@@ -100,7 +105,8 @@ public class FixedEventService {
                         enrollmentCounts.getOrDefault(event.getId(), 0),
                         enrolledEventIds.contains(event.getId()),
                         currentUserEnrollmentStatuses.get(event.getId()),
-                        locale
+                        locale,
+                        currentUserMembershipPurchases.get(event.getId())
                 ))
                 .toList();
     }
@@ -128,7 +134,7 @@ public class FixedEventService {
                 .findByEventIdAndUserIdAndStatus(eventId, userId, FixedEventEnrollmentStatus.ACTIVE);
         if (existingEnrollment.isPresent()) {
             int enrolledCount = (int) fixedEventEnrollmentRepository.countByEventIdAndStatus(eventId, FixedEventEnrollmentStatus.ACTIVE);
-            return toResponse(event, enrolledCount, true, FixedEventEnrollmentStatus.ACTIVE, locale);
+            return toResponse(event, enrolledCount, true, FixedEventEnrollmentStatus.ACTIVE, locale, existingEnrollment.get().getMembershipPurchase());
         }
 
         int enrolledCount = (int) fixedEventEnrollmentRepository.countByEventIdAndStatus(eventId, FixedEventEnrollmentStatus.ACTIVE);
@@ -136,14 +142,17 @@ public class FixedEventService {
             throw new BadRequestException("Event is full");
         }
 
+        MembershipPurchase membershipPurchase = membershipService.consumeVisit(userId, request.membershipPurchaseId(), event.getService());
+
         FixedEventEnrollment enrollment = new FixedEventEnrollment();
         enrollment.setEvent(event);
         enrollment.setUser(user);
         enrollment.setStatus(FixedEventEnrollmentStatus.ACTIVE);
         enrollment.setReminderOptIn(request.reminderOptIn());
+        enrollment.setMembershipPurchase(membershipPurchase);
         fixedEventEnrollmentRepository.save(enrollment);
 
-        return toResponse(event, enrolledCount + 1, true, FixedEventEnrollmentStatus.ACTIVE, locale);
+        return toResponse(event, enrolledCount + 1, true, FixedEventEnrollmentStatus.ACTIVE, locale, membershipPurchase);
     }
 
     @Transactional(readOnly = true)
@@ -165,7 +174,8 @@ public class FixedEventService {
                         enrollmentCounts.getOrDefault(enrollment.getEvent().getId(), 0),
                         enrollment.getStatus() == FixedEventEnrollmentStatus.ACTIVE,
                         enrollment.getStatus(),
-                        locale
+                        locale,
+                        enrollment.getMembershipPurchase()
                 ))
                 .toList();
     }
@@ -182,10 +192,11 @@ public class FixedEventService {
         }
 
         enrollment.setStatus(FixedEventEnrollmentStatus.CANCELLED);
+        membershipService.refundVisit(enrollment.getMembershipPurchase());
         fixedEventEnrollmentRepository.save(enrollment);
         int enrolledCount = (int) fixedEventEnrollmentRepository.countByEventIdAndStatus(eventId, FixedEventEnrollmentStatus.ACTIVE);
 
-        return toResponse(event, Math.max(enrolledCount, 0), false, FixedEventEnrollmentStatus.CANCELLED, locale);
+        return toResponse(event, Math.max(enrolledCount, 0), false, FixedEventEnrollmentStatus.CANCELLED, locale, enrollment.getMembershipPurchase());
     }
 
     @Transactional(readOnly = true)
@@ -442,6 +453,10 @@ public class FixedEventService {
     }
 
     private PublicFixedEventResponse toResponse(FixedEvent event, int enrolledCount, boolean enrolled, FixedEventEnrollmentStatus enrollmentStatus, ServiceLocale locale) {
+        return toResponse(event, enrolledCount, enrolled, enrollmentStatus, locale, null);
+    }
+
+    private PublicFixedEventResponse toResponse(FixedEvent event, int enrolledCount, boolean enrolled, FixedEventEnrollmentStatus enrollmentStatus, ServiceLocale locale, MembershipPurchase membershipPurchase) {
         ServiceOffering service = event.getService();
         Office office = event.getOffice();
         User specialist = event.getSpecialist();
@@ -474,7 +489,9 @@ public class FixedEventService {
                 enrolled,
                 enrollmentStatus,
                 service.getBasePrice(),
-                event.getNote()
+                event.getNote(),
+                membershipPurchase == null ? null : membershipPurchase.getId(),
+                membershipPurchase != null
         );
     }
 
